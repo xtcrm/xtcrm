@@ -9,7 +9,6 @@
 !.env.example
 .mcp.json
 .claude/
-vendor/
 public/uploads/
 dist/
 *.log
