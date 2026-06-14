@@ -36,6 +36,10 @@ npm run dev
 # 4. 构建
 npm run build
 # → 输出到 public/crm/
+
+管理员账号：admin/123123
+
+数据库/data/xtcrm_data.sql
 ```
 
 开发时访问 `http://localhost:9999`，登录页 `/#/passport/login`。
