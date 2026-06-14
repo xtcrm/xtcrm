@@ -1,0 +1,34 @@
+{
+    "name": "crm",
+    "version": "2.3.2",
+    "title": "CRM客户管理",
+    "description": "制造业基础版CRM，覆盖客户、线索、报价、订单、合同全流程",
+    "author": "雄韬科技",
+    "type": "module",
+    "depends": {
+        "core": ">=1.0.0"
+    },
+    "tables": [
+        "crm_customer",
+        "crm_contact",
+        "crm_lead",
+        "crm_followup",
+        "crm_quotation",
+        "crm_quotation_item",
+        "crm_contract",
+        "crm_order",
+        "crm_order_item",
+        "crm_product",
+        "crm_notification",
+        "crm_insight",
+        "crm_projection",
+        "crm_agent_log",
+        "crm_ai_suggestion",
+        "crm_event_log",
+        "crm_knowledge",
+        "crm_customer_collaborator",
+        "crm_customer_claim_log"
+    ],
+    "menu": "config/menu.php",
+    "frontend": "frontend/"
+}

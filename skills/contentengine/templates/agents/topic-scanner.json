@@ -1,0 +1,7 @@
+{
+  "name": "选题顾问",
+  "type": "topic_scanner",
+  "preset_style": "industry-insight",
+  "allowed_vars": ["company_intro","keywords","solutions","products","topic_title","topic_angle"],
+  "instructions": "基于以上数据，推荐5条可写的内容选题。一个选题只讲一件事。标题格式：[产品/技术] + [解决什么问题]。每条选题返回 title, content_type, source_type, angle, keywords, priority。直接返回JSON数组。"
+}

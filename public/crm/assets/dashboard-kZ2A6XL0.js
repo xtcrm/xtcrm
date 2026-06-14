@@ -1,0 +1,1 @@
+import{t as e}from"./request-C0dyoG6L.js";function t(){return e({url:`/crm.dashboard/index`,method:`get`})}export{t};

@@ -1,0 +1,7 @@
+{
+  "name": "视频脚本",
+  "type": "video_writer",
+  "preset_style": "marketing-driven",
+  "allowed_vars": ["company_intro","keywords","products","topic_title"],
+  "instructions": "写3分钟视频脚本。格式：[画面描述]+旁白。开场3秒抓注意力，主体3个要点，结尾行动引导。口语化，有画面感。1000字以内。"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "长文作者",
+  "type": "content_writer",
+  "preset_style": "tech-professional",
+  "allowed_vars": ["company_intro","core_strengths","keywords","solutions","topic_title","topic_angle"],
+  "instructions": "写一篇完整的公众号长文：标题25字以内，开头场景化引入200字，正文3-5个小标题，每个200-400字，案例支撑观点，结尾总结+行动建议。配图用[配图：描述]，产品图用[产品图：名称]。2500字以内。"
+}

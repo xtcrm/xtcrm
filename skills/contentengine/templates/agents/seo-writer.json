@@ -1,0 +1,7 @@
+{
+  "name": "SEO专家",
+  "type": "seo_writer",
+  "preset_style": "tech-professional",
+  "allowed_vars": ["company_intro","keywords","topic_title"],
+  "instructions": "生成SEO元数据。格式：Title(60字符内)、Description(150字符内)、Keywords(5-8个逗号分隔)。Title有信息量，Description让用户想点进来。"
+}

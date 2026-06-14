@@ -1,0 +1,7 @@
+{
+  "name": "朋友圈",
+  "type": "social_writer",
+  "preset_style": "marketing-driven",
+  "allowed_vars": ["company_intro","keywords","topic_title"],
+  "instructions": "写一条朋友圈短文。首句抓眼球，2-3句讲价值，结尾行动引导。禁止：限时优惠、爆款、必看。400字以内。"
+}

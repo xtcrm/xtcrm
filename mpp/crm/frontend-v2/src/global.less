@@ -1,0 +1,31 @@
+// 全局样式 — 主题色通过 App.vue ConfigProvider token 控制
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+// 表格头
+.ant-table-thead > tr > th { background: #fafafa; font-weight: 600; font-size: 12px; color: #666; }
+
+// 卡片
+.ant-card { border-radius: 6px; }
+
+// 表格搜索
+.table-page-search-wrapper .ant-form-inline .ant-form-item { margin-bottom: 8px; }
+.table-operator { margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+// 滚动条
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+// 统计组件
+.ant-statistic-title { font-size: 12px; color: #999; }
+.ant-statistic-content { font-size: 24px; }
+
+// 登录页
+.login-layout {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #f5f0e8 0%, #e8e4db 100%);
+}

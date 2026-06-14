@@ -1,0 +1,6 @@
+{
+  "name": "@skills/invoice",
+  "version": "1.0.0",
+  "private": true,
+  "main": "routes-v2.js"
+}

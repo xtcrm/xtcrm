@@ -1,0 +1,30 @@
+/.vscode
+/runtime
+/versions
+/node_modules
+/design-systems
+# 环境配置：忽略 .env / .env.production 等，但保留 .env.example 模板（新人参考）
+.env
+.env.*
+!.env.example
+.mcp.json
+.claude/
+vendor/
+public/uploads/
+dist/
+*.log
+.user.ini
+composer.lock
+/mpp/crm/frontend-v2/node_modules
+/mpp/crm/frontend-v2/dist
+/mpp/crm/frontend-v2/.env
+/mpp/crm/frontend-v2/.env.*
+/mpp/crm/frontend-v2/.vscode
+/mpp/crm/frontend-v2/.mcp.json
+CLAUDE.md
+# 临时脚本 & 种子数据
+/seed_*.php
+/run_*.php
+# 自动生成的锁文件
+/skills-lock.json
+AGENTS.md
