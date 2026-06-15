@@ -1,6 +1,10 @@
-# XiongTao CRM
+# XTCRM 1.0
 
 雄韬 CRM 管理后台前端。Vue 3 + Vite + Ant Design Vue 4，配合 ThinkPHP 6.1 后端。
+
+![首页](docs/首页.png)
+
+![客户页](docs/客户页.png)
 
 ---
 
@@ -58,31 +62,120 @@ nvm use 22
 nvm use        # 自动读取 .nvmrc，切换到 v22.16.0
 ```
 
+### PHP（宝塔面板）
+
+后端基于 ThinkPHP 6.1，**需要 PHP 7.4 + MySQL + Redis**。推荐使用**宝塔面板**一键搭建环境。
+
+#### 宝塔安装 PHP 环境
+
+1. 安装宝塔面板（[bt.cn](https://www.bt.cn)），登录后台
+2. 进入 **软件商店** → 搜索安装：
+   - **PHP 7.4**（必须）
+   - **MySQL 5.7+**
+   - **Redis**
+   - **Nginx**（推荐）
+3. PHP 7.4 → **设置** → **安装扩展**，确保开启：
+   - `redis`、`fileinfo`、`pdo_mysql`、`mbstring`、`curl`、`openssl`
+
+#### 新建网站
+
+1. **网站** → **添加站点**
+2. 填写域名（开发环境可用本地域名如 `crm.dev.xtocn.com`，或直接用 `localhost`）
+3. 根目录指向项目的 **`public/`** 目录，例：
+   ```
+   /www/wwwroot/xtcrm/public
+   ```
+4. PHP 版本选择 **PHP-74**
+5. 数据库：勾选"创建数据库"，记下数据库名、用户名、密码
+
+#### 伪静态（URL 重写）
+
+网站 → **设置** → **伪静态**，粘贴以下 Nginx 规则：
+
+```nginx
+# 静态文件直接返回
+location /crm/ {
+    try_files $uri $uri/ /crm/index.html;
+}
+
+# API 请求全部转发到 index.php
+location / {
+    if (!-e $request_filename) {
+        rewrite ^/index\.php(.*)$ /index.php?s=$1 last;
+    }
+}
+```
+
+#### 配置 .env
+
+在项目根目录复制 `.env.example` 为 `.env`，修改数据库和 Redis 配置：
+
+```ini
+[DATABASE]
+TYPE = mysql
+HOSTNAME = 127.0.0.1
+DATABASE = xtcrm           # 宝塔创建的数据库名
+USERNAME = xtcrm           # 数据库用户名
+PASSWORD = your_password   # 数据库密码
+HOSTPORT = 3306
+PREFIX = tao_
+
+[REDIS]
+HOST = 127.0.0.1
+PORT = 6379
+```
+
+#### 导入数据库
+
+在宝塔面板 **数据库** → 找到对应库 → **导入**，选择项目中的 `/data/xtcrm_data.sql`。
+
+或者命令行：
+
+```bash
+mysql -u xtcrm -p xtcrm < data/xtcrm_data.sql
+```
+
+导入后用宝塔 **面板后台 → 数据库** 确认 `tao_` 开头的表已创建成功。
+
+#### 目录权限
+
+宝塔默认运行用户是 `www`，确保以下目录可写：
+
+```bash
+chmod -R 755 runtime/
+chmod -R 755 public/uploads/
+```
+
+---
+
 ## 快速开始
 
 ```bash
 # 1. 克隆
 git clone https://github.com/xtoyun/xtcrm.git
-cd xtcrm/mpp/crm/frontend-v2
+cd xtcrm
 
-# 2. 切换到正确的 Node 版本
+# 2. PHP 环境（宝塔面板）
+# 参考上方「PHP（宝塔面板）」节，安装 PHP 7.4 / MySQL / Redis，
+# 新建网站指向 public/，导入 data/xtcrm_data.sql，配置 .env
+
+# 3. 前端 — 切换到正确的 Node 版本
+cd mpp/crm/frontend-v2
 nvm use
 
-# 3. 安装
+# 4. 安装依赖
 npm install
 
-# 4. 开发模式（Vite dev server，端口 9999）
+# 5. 开发模式（Vite dev server，端口 9999）
 npm run dev
 # → http://localhost:9999
 # Vite 自动代理 /index.php 到后端（见 vite.config.js 的 server.proxy）
 
-# 5. 构建
+# 6. 构建
 npm run build
 # → 输出到 public/crm/
 
 管理员账号：admin/123123
-
-数据库/data/xtcrm_data.sql
 ```
 
 开发时访问 `http://localhost:9999`，登录页 `/#/passport/login`。
