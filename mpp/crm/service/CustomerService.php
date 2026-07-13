@@ -114,6 +114,7 @@ class CustomerService extends BaseService
         $oldOwner = $customer['owner_user_id'];
         $customer->owner_user_id = $actorUserId;
         $customer->enter_pool_time = null;
+        $customer->last_followup_time = time();
         if ($customer->save()) {
             EventService::record('customer_claimed', 'customer', $id, [
                 'from_user_id' => $oldOwner, 'to_user_id' => $actorUserId,

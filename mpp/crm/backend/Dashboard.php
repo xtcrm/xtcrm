@@ -86,7 +86,7 @@ class Dashboard extends BaseController
 
         // 最近跟进（非超管只看自己客户的）
         $rf = Db::name('crm_followup')->alias('f')
-            ->join('crm_customer c', 'f.customer_id = c.id AND c.store_id = f.store_id')
+            ->join('yoshop_crm_customer c', 'f.customer_id = c.id AND c.store_id = f.store_id')
             ->where('f.store_id', $sid)->where('f.is_delete', 0)
             ->field('f.*, c.customer_name')
             ->order(['f.create_time' => 'desc'])->limit(10);
@@ -98,7 +98,8 @@ class Dashboard extends BaseController
 
         // 洞察卡片（按当前用户权限过滤）
         $user = TokenService::getUser();
-        $insightQuery = InsightModel::where('status', 'active')
+        $insightQuery = InsightModel::where('yoshop_crm_insight.store_id', $sid)
+            ->where('status', 'active')
             ->order('priority', 'desc')->order('create_time', 'desc')
             ->limit(15);
         if (empty($user['is_super'])) {

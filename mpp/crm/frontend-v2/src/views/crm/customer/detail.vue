@@ -53,7 +53,7 @@
         </a-select>
       </a-descriptions-item>
       <a-descriptions-item label="税号">
-        <span v-if="!canEdit || editingField !== 'tax_number'" @click="startEdit('tax_number')" :class="{ 'field-editable': canEdit }">{{ detail.tax_number || '-' }}</span>
+        <span v-if="!canEdit || editingField !== 'tax_number'">{{ detail.tax_number || '-' }}</span>
         <a-input v-else :value="detail.tax_number" @press-enter="(e) => saveField('tax_number', e.target.value)" @blur="(e) => saveField('tax_number', e.target.value)" size="small" style="width:160px" />
       </a-descriptions-item>
       <a-descriptions-item label="信用额度">
@@ -99,6 +99,92 @@
     </a-descriptions>
 
     <!-- AI客户画像 -->
+    <!-- 工商信息 -->
+    <a-card size="small" title="工商信息" style="margin-bottom:16px">
+      <a-descriptions :column="3" size="small" bordered>
+        <a-descriptions-item label="统一社会信用代码">
+          <span v-if="!canEdit || editingField !== 'tax_number'" @click="startEdit('tax_number')" :class="{ 'field-editable': canEdit }">{{ detail.tax_number || '-' }}</span>
+          <a-input v-else :value="detail.tax_number" @press-enter="(e) => saveField('tax_number', e.target.value)" @blur="(e) => saveField('tax_number', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="工商注册号">
+          <span v-if="!canEdit || editingField !== 'business_registration_no'" @click="startEdit('business_registration_no')" :class="{ 'field-editable': canEdit }">{{ detail.business_registration_no || '-' }}</span>
+          <a-input v-else :value="detail.business_registration_no" @press-enter="(e) => saveField('business_registration_no', e.target.value)" @blur="(e) => saveField('business_registration_no', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="法定代表人">
+          <span v-if="!canEdit || editingField !== 'legal_representative'" @click="startEdit('legal_representative')" :class="{ 'field-editable': canEdit }">{{ detail.legal_representative || '-' }}</span>
+          <a-input v-else :value="detail.legal_representative" @press-enter="(e) => saveField('legal_representative', e.target.value)" @blur="(e) => saveField('legal_representative', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="注册资本">
+          <span v-if="!canEdit || editingField !== 'registered_capital'" @click="startEdit('registered_capital')" :class="{ 'field-editable': canEdit }">{{ detail.registered_capital || '-' }}</span>
+          <a-input v-else :value="detail.registered_capital" @press-enter="(e) => saveField('registered_capital', e.target.value)" @blur="(e) => saveField('registered_capital', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="实缴资本">
+          <span v-if="!canEdit || editingField !== 'paid_in_capital'" @click="startEdit('paid_in_capital')" :class="{ 'field-editable': canEdit }">{{ detail.paid_in_capital || '-' }}</span>
+          <a-input v-else :value="detail.paid_in_capital" @press-enter="(e) => saveField('paid_in_capital', e.target.value)" @blur="(e) => saveField('paid_in_capital', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="成立日期">
+          <span v-if="!canEdit || editingField !== 'established_date'" @click="startEdit('established_date')" :class="{ 'field-editable': canEdit }">{{ detail.established_date || '-' }}</span>
+          <a-date-picker v-else :value="detail.established_date ? dayjs(detail.established_date) : null" @change="(d) => saveField('established_date', d)" :open="true" value-format="YYYY-MM-DD" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="登记状态">
+          <span v-if="!canEdit || editingField !== 'registration_status'" @click="startEdit('registration_status')" :class="{ 'field-editable': canEdit }">{{ detail.registration_status || '-' }}</span>
+          <a-select v-else :value="detail.registration_status" @change="(v) => saveField('registration_status', v)" @blur="editingField = ''" size="small" style="width:180px" auto-focus allow-clear>
+            <a-select-option v-for="s in ['存续','在业','吊销','注销','迁入','迁出','停业','清算']" :key="s" :value="s">{{ s }}</a-select-option>
+          </a-select>
+        </a-descriptions-item>
+        <a-descriptions-item label="纳税人资质">
+          <span v-if="!canEdit || editingField !== 'taxpayer_qualification'" @click="startEdit('taxpayer_qualification')" :class="{ 'field-editable': canEdit }">{{ detail.taxpayer_qualification || '-' }}</span>
+          <a-select v-else :value="detail.taxpayer_qualification" @change="(v) => saveField('taxpayer_qualification', v)" @blur="editingField = ''" size="small" style="width:180px" auto-focus allow-clear>
+            <a-select-option value="一般纳税人">一般纳税人</a-select-option><a-select-option value="小规模纳税人">小规模纳税人</a-select-option>
+          </a-select>
+        </a-descriptions-item>
+        <a-descriptions-item label="组织机构代码">
+          <span v-if="!canEdit || editingField !== 'organization_code'" @click="startEdit('organization_code')" :class="{ 'field-editable': canEdit }">{{ detail.organization_code || '-' }}</span>
+          <a-input v-else :value="detail.organization_code" @press-enter="(e) => saveField('organization_code', e.target.value)" @blur="(e) => saveField('organization_code', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="参保人数">
+          <span v-if="!canEdit || editingField !== 'insured_count'" @click="startEdit('insured_count')" :class="{ 'field-editable': canEdit }">{{ detail.insured_count || '-' }}</span>
+          <a-input v-else :value="detail.insured_count" @press-enter="(e) => saveField('insured_count', e.target.value)" @blur="(e) => saveField('insured_count', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="营业期限">
+          <span v-if="!canEdit || editingField !== 'business_term'" @click="startEdit('business_term')" :class="{ 'field-editable': canEdit }">{{ detail.business_term || '-' }}</span>
+          <a-input v-else :value="detail.business_term" @press-enter="(e) => saveField('business_term', e.target.value)" @blur="(e) => saveField('business_term', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="核准日期">
+          <span v-if="!canEdit || editingField !== 'approval_date'" @click="startEdit('approval_date')" :class="{ 'field-editable': canEdit }">{{ detail.approval_date || '-' }}</span>
+          <a-date-picker v-else :value="detail.approval_date ? dayjs(detail.approval_date) : null" @change="(d) => saveField('approval_date', d)" :open="true" value-format="YYYY-MM-DD" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="登记机关" :span="2">
+          <span v-if="!canEdit || editingField !== 'registration_authority'" @click="startEdit('registration_authority')" :class="{ 'field-editable': canEdit }">{{ detail.registration_authority || '-' }}</span>
+          <a-input v-else :value="detail.registration_authority" @press-enter="(e) => saveField('registration_authority', e.target.value)" @blur="(e) => saveField('registration_authority', e.target.value)" size="small" style="width:300px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="国标行业">
+          <span v-if="!canEdit || editingField !== 'national_industry'" @click="startEdit('national_industry')" :class="{ 'field-editable': canEdit }">{{ detail.national_industry || '-' }}</span>
+          <a-input v-else :value="detail.national_industry" @press-enter="(e) => saveField('national_industry', e.target.value)" @blur="(e) => saveField('national_industry', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="公司电话">
+          <span v-if="!canEdit || editingField !== 'telephone'" @click="startEdit('telephone')" :class="{ 'field-editable': canEdit }">{{ detail.telephone || '-' }}</span>
+          <a-input v-else :value="detail.telephone" @press-enter="(e) => saveField('telephone', e.target.value)" @blur="(e) => saveField('telephone', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="公司邮箱">
+          <span v-if="!canEdit || editingField !== 'email'" @click="startEdit('email')" :class="{ 'field-editable': canEdit }">{{ detail.email || '-' }}</span>
+          <a-input v-else :value="detail.email" @press-enter="(e) => saveField('email', e.target.value)" @blur="(e) => saveField('email', e.target.value)" size="small" style="width:180px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="注册地址" :span="3">
+          <span v-if="!canEdit || editingField !== 'registered_address'" @click="startEdit('registered_address')" :class="{ 'field-editable': canEdit }">{{ detail.registered_address || '-' }}</span>
+          <a-input v-else :value="detail.registered_address" @press-enter="(e) => saveField('registered_address', e.target.value)" @blur="(e) => saveField('registered_address', e.target.value)" size="small" style="width:400px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="经营范围" :span="3">
+          <span v-if="!canEdit || editingField !== 'business_scope'" @click="startEdit('business_scope')" :class="{ 'field-editable': canEdit }">{{ detail.business_scope || '-' }}</span>
+          <a-textarea v-else :value="detail.business_scope" @press-enter="(e) => saveField('business_scope', e.target.value)" @blur="(e) => saveField('business_scope', e.target.value)" size="small" :rows="3" style="width:400px" />
+        </a-descriptions-item>
+        <a-descriptions-item label="公司简介" :span="3">
+          <span v-if="!canEdit || editingField !== 'introduction'" @click="startEdit('introduction')" :class="{ 'field-editable': canEdit }">{{ detail.introduction || '-' }}</span>
+          <a-textarea v-else :value="detail.introduction" @press-enter="(e) => saveField('introduction', e.target.value)" @blur="(e) => saveField('introduction', e.target.value)" size="small" :rows="3" style="width:400px" />
+        </a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
     <a-card v-if="portraitData" size="small" title="客户画像" style="margin-bottom:16px">
       <a-descriptions :column="2" size="small">
         <a-descriptions-item label="概况" :span="2">{{ portraitData.summary }}</a-descriptions-item>
@@ -162,13 +248,19 @@
           <a-table-column title="姓名" data-index="contact_name" key="contact_name" />
           <a-table-column title="职位" data-index="position" key="position" />
           <a-table-column title="手机" data-index="mobile" key="mobile" width="120" />
+          <a-table-column title="生日" data-index="birthday" key="birthday" width="100" />
+          <a-table-column title="籍贯" data-index="hometown" key="hometown" width="80" />
           <a-table-column title="邮箱" data-index="email" key="email" />
           <a-table-column title="首要" data-index="is_primary" key="is_primary" width="60">
             <template #default="{ text }"><a-tag v-if="text" color="blue">是</a-tag></template>
           </a-table-column>
-          <a-table-column v-if="canEditRelated" title="操作" key="action" width="120">
+          <a-table-column v-if="canEditRelated" title="操作" key="action" width="160">
             <template #default="{ record }">
               <a @click="handleEditContact(record)">编辑</a>
+              <a-divider type="vertical" />
+              <a-popconfirm title="解除与该客户的绑定?" @confirm="handleUnbindContact(record)">
+                <a>解绑</a>
+              </a-popconfirm>
               <a-divider type="vertical" />
               <a-popconfirm title="确认删除?" @confirm="handleDeleteContact(record)">
                 <a style="color:#ff4d4f">删除</a>
@@ -271,7 +363,7 @@ import { message } from 'ant-design-vue'
 import { PlusOutlined, PaperClipOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getDetail, release, edit, analyze, portrait, claim as claimApi } from '@/api/crm/customer'
-import { getList as getContacts, deleteById as deleteContact } from '@/api/crm/contact'
+import { getByCustomer as getContacts, unbind as unbindContact, deleteById as deleteContact } from '@/api/crm/contact'
 import { getList as getFollowups, add as addFollowup, deleteById as deleteFollowup } from '@/api/crm/followUp'
 import { getList as getQuotations } from '@/api/crm/quotation'
 import { getList as getOrders } from '@/api/crm/order'
@@ -384,7 +476,7 @@ const aiSummary = computed(() => {
   if (lastFollowup) {
     const days = Math.floor((Date.now() - lastFollowup.follow_date * 1000) / 86400000)
     html += '<br>最近跟进：' + days + '天前 [' + (lastFollowup.follow_type || '') + '] '
-    html += (lastFollowup.follow_content || '').replace(/<[^>]*>/g, '').substring(0, 60)
+    html += decodeHtml(lastFollowup.follow_content || '').replace(/<[^>]*>/g, '').substring(0, 60)
   }
   if (p.summary) html += '<br><b>🔍 画像：</b>' + p.summary
   if (p.needs) html += ' · ' + p.needs
@@ -413,7 +505,7 @@ function loadDetail() {
 function loadContacts() {
   const id = route.query.id; if (!id) return
   contactsLoading.value = true
-  getContacts(id).then(res => { contacts.value = (res?.data?.list?.data || res?.data?.list || []); contactsLoading.value = false }).catch(() => { contactsLoading.value = false })
+  getContacts(id).then(res => { contacts.value = (res?.data?.list || []); contactsLoading.value = false }).catch(() => { contactsLoading.value = false })
 }
 function loadFollowups() { const id = route.query.id; if (!id) return; getFollowups(id).then(res => { followups.value = (res?.data?.list?.data || res?.data?.list || []) }).catch(() => {}) }
 function loadQuotations() { const id = route.query.id; if (!id) return; getQuotations({ customer_id: id }).then(res => { quotations.value = (res?.data?.list?.data || res?.data?.list || []) }).catch(() => {}) }
@@ -440,7 +532,7 @@ function handleUpload(file) {
   uploadFileName.value = file.name
   const formData = new FormData()
   formData.append('iFile', file)
-  request({ url: '/upload/file', method: 'post', data: formData })
+  request({ url: '/upload/file', method: 'post', data: formData, headers: { 'Content-Type': 'multipart/form-data' } })
     .then(res => { followupForm.attachment = res?.data?.fileInfo?.file_path || ''; message.success('上传成功') }).catch(() => { message.error('上传失败') })
   return false
 }
@@ -463,6 +555,7 @@ function handleDeleteFollow(item) { deleteFollowup(item.id).then(() => { message
 // ---- Contact actions ----
 function handleAddContact() { contactSelected.value = null; contactFormVisible.value = true }
 function handleEditContact(record) { contactSelected.value = record; contactFormVisible.value = true }
+function handleUnbindContact(record) { unbindContact(record.id, route.query.id).then(() => { message.success('已解除绑定'); loadContacts() }) }
 function handleDeleteContact(record) { deleteContact(record.id).then(() => { message.success('删除成功'); loadContacts() }) }
 
 // ---- Collab actions ----

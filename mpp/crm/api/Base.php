@@ -51,12 +51,8 @@ class Base extends BaseController
      */
     protected function checkToken(): void
     {
-        // 优先 Authorization: Bearer xxx，fallback Access-Token（PC 后台共用 token）
         $header = $this->request->header('Authorization', '');
-        $token = trim(str_replace('Bearer ', '', $header));
-        if (empty($token)) {
-            $token = $this->request->header('Access-Token', '');
-        }
+        $token = str_replace('Bearer ', '', $header);
         $token = trim($token);
 
         if (empty($token)) {

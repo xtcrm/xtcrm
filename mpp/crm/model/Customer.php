@@ -33,6 +33,17 @@ class Customer extends BaseModel
                 $filterWhere[$key] = $value;
             }
         }
+        // keyword: 多字段模糊搜索（移动端 + PC 端通用）
+        if (!empty($where['keyword'])) {
+            $kw = $where['keyword'];
+            $filterWhere[] = function ($q) use ($kw) {
+                $q->where('customer_name', 'like', "%{$kw}%")
+                  ->whereOr('short_name', 'like', "%{$kw}%")
+                  ->whereOr('tax_number', 'like', "%{$kw}%")
+                  ->whereOr('telephone', 'like', "%{$kw}%");
+            };
+            unset($where['keyword']);
+        }
         // customer_name: 精确匹配改为模糊搜索
         if (!empty($where['customer_name'])) {
             $filterWhere[] = ['customer_name', 'like', '%' . $where['customer_name'] . '%'];
@@ -305,7 +316,7 @@ class Customer extends BaseModel
     {
         $uid = static::$currentUser['store_user_id'] ?? 0;
         return $this->alias('c')
-            ->join('crm_customer_collaborator cc', 'c.id=cc.customer_id')
+            ->join('yoshop_crm_customer_collaborator cc', 'c.id=cc.customer_id')
             ->where('cc.user_id', $uid)
             ->where('c.is_delete', 0)
             ->field('c.*, cc.permission as collab_permission, cc.id as collab_id')

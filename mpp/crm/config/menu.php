@@ -49,6 +49,9 @@ return [
             ['name' => 'AI分析',    'path' => '/crm/customer/analyze',      'action' => 'analyze'],
             ['name' => 'AI画像',    'path' => '/crm/customer/portrait',     'action' => 'portrait'],
             ['name' => '智能搜索',  'path' => '/crm/customer/smartSearch',  'action' => 'smartSearch'],
+            ['name' => '今日拜访',   'path' => '/crm/customer/today-visit',  'action' => 'todayVisits'],
+            ['name' => '联系人管理', 'path' => '/crm/contact/list',        'action' => 'list'],
+            ['name' => '联系人详情', 'path' => '/crm/contact/detail',      'action' => 'detail''],
         ],
     ],
     [
@@ -76,10 +79,29 @@ return [
         'sort'     => 7,
     ],
     [
+        'name'     => '获客账本',
+        'path'     => '/app/leadledger',
+        'icon'     => 'solution',
+        'sort'     => 9,
+        'children' => [
+            ['name' => '驾驶舱',   'path' => '/app/leadledger/dashboard',    'action' => 'lists'],
+            ['name' => '分享链接', 'path' => '/app/leadledger/share-link',   'action' => 'lists'],
+            ['name' => '页面模板', 'path' => '/app/leadledger/page-template','action' => 'lists'],
+            ['name' => '表单设计', 'path' => '/app/leadledger/form-design',  'action' => 'lists'],
+            ['name' => '线索列表', 'path' => '/app/leadledger/lead',         'action' => 'lists'],
+        ],
+    ],
+    [
+        'name'     => '票无忧',
+        'path'     => '/app/invoice',
+        'icon'     => 'file-protect',
+        'sort'     => 10,
+    ],
+    [
         'name'     => '系统设置',
         'path'     => '/setting',
         'icon'     => 'setting',
-        'sort'     => 8,
+        'sort'     => 99,
         'children' => [
             ['name' => '产品管理', 'path' => '/crm/product/lists', 'action' => 'lists'],
             ['name' => 'CRM设置',  'path' => '/crm/setting/index', 'action' => 'index'],

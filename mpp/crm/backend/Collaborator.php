@@ -12,7 +12,7 @@ class Collaborator extends BaseController
     {
         $customerId = $this->request->param('customer_id', 0);
         $list = Db::name('crm_customer_collaborator')->alias('cc')
-            ->join('store_user u', 'cc.user_id=u.store_user_id')
+            ->join('yoshop_store_user u', 'cc.user_id=u.store_user_id')
             ->where('cc.customer_id', $customerId)
             ->field('cc.*, u.real_name, u.user_name')
             ->order('cc.id desc')->select();

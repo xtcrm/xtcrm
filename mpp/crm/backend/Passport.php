@@ -22,22 +22,16 @@ class Passport extends BaseController
     ];
 
     protected $methodRules = [
+        'login'  => 'POST',
         'logout' => 'POST',
     ];
 
     /**
      * 用户登录
-     * GET  → 重定向到前端登录页
-     * POST → API 登录
+     * POST /crm.passport/login
      */
     public function login()
     {
-        // GET 请求：浏览器地址栏访问 → 跳转前端 Vue 登录页
-        if (!$this->request->isPost()) {
-            $redirect = $this->request->param('redirect', '/');
-            return redirect('/passport/login?redirect=' . urlencode($redirect));
-        }
-
         $data = $this->postData();
         $username = trim($data['username'] ?? '');
         $password = $data['password'] ?? '';

@@ -5,7 +5,8 @@
         <div class="logo-mark">
           <svg width="28" height="28" viewBox="0 0 28 28"><rect x="2" y="2" width="24" height="24" rx="5" fill="none" stroke="#d6893b" stroke-width="1.5" opacity=".6"/><circle cx="14" cy="14" r="5" fill="none" stroke="#d6893b" stroke-width="2"/><line x1="14" y1="2" x2="14" y2="9" stroke="#d6893b" stroke-width="1" opacity=".5"/><line x1="14" y1="19" x2="14" y2="26" stroke="#d6893b" stroke-width="1" opacity=".5"/><line x1="2" y1="14" x2="9" y2="14" stroke="#d6893b" stroke-width="1" opacity=".5"/><line x1="19" y1="14" x2="26" y2="14" stroke="#d6893b" stroke-width="1" opacity=".5"/></svg>
         </div>
-        <h1>雄韬客户管理平台</h1>
+        <h1>管理平台</h1>
+        <p>制造业客户管理系统</p>
       </div>
 
       <a-form :model="formState" :rules="rules" @finish="handleLogin" autocomplete="off">

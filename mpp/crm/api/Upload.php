@@ -3,10 +3,11 @@ declare(strict_types=1);
 
 namespace mpp\crm\api;
 
-use think\facade\Db;
 use app\common\library\storage\Driver as StorageDriver;
+use app\common\enum\Setting as SettingEnum;
 use app\common\enum\file\FileType as FileTypeEnum;
-use app\platform\model\UploadFile as UploadFileModel;
+use app\store\model\Setting as SettingModel;
+use app\store\model\UploadFile as UploadFileModel;
 
 /**
  * 移动端文件上传
@@ -19,8 +20,7 @@ class Upload extends Base
     public function initialize()
     {
         parent::initialize();
-        // 默认本地存储
-        $this->config = ['default' => 'local', 'engine' => ['local' => null]];
+        $this->config = SettingModel::getItem(SettingEnum::STORAGE);
     }
 
     protected $methodRules = [

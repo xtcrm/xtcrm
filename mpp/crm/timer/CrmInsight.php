@@ -13,7 +13,7 @@ use think\facade\Log;
 class CrmInsight extends Task
 {
     private $taskKey = 'CrmInsight';
-    protected $taskExpire = 86400;
+    protected $taskExpire = 3600;
     private $storeId;
 
     public function handle(array $param)

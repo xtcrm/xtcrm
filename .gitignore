@@ -20,6 +20,7 @@ composer.lock
 /mpp/crm/frontend-v2/.env.*
 /mpp/crm/frontend-v2/.vscode
 /mpp/crm/frontend-v2/.mcp.json
+/mpp/crm/mobile
 CLAUDE.md
 # 临时脚本 & 种子数据
 /seed_*.php

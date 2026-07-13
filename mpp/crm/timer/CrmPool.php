@@ -12,7 +12,7 @@ use think\facade\Log;
 class CrmPool extends Task
 {
     private $taskKey = 'CrmPool';
-    protected $taskExpire = 86400;
+    protected $taskExpire = 3600; 
 
     private $storeId;
 

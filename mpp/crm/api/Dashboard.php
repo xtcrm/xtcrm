@@ -64,7 +64,7 @@ class Dashboard extends Base
         // 最近跟进（管理员看全部，其他人只看自己的）
         $recentFollows = Db::name('crm_followup')
             ->alias('f')
-            ->join('crm_customer c', 'f.customer_id = c.id AND c.store_id = f.store_id')
+            ->join('yoshop_crm_customer c', 'f.customer_id = c.id AND c.store_id = f.store_id')
             ->where('f.store_id', $sid)->where('f.is_delete', 0)
             ->where(function ($q) use ($userId) {
                 // 非管理员只看自己的跟进
@@ -76,7 +76,8 @@ class Dashboard extends Base
             ->order(['f.create_time' => 'desc'])->limit(10)->select();
 
         // 洞察
-        $insightQuery = InsightModel::where('status', 'active')->order('priority', 'desc')->order('create_time', 'desc')->limit(5);
+        $insightQuery = InsightModel::where('yoshop_crm_insight.store_id', $sid)
+            ->where('status', 'active')->order('priority', 'desc')->order('create_time', 'desc')->limit(5);
         if (empty($this->store['is_super']) && ($this->store['role_id'] ?? 0) !== 1) {
             $insightQuery->where('user_id', $userId);
         }

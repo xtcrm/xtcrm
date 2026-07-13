@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 
 // 所有路由都直接注册，不走动态 addRoute
 import { asyncRoutes } from './asyncRoutes'
@@ -19,7 +19,7 @@ const constantRoutes = [
 ]
 
 const router = createRouter({
-  history: createWebHashHistory('/crm/'),
+  history: createWebHistory(),
   routes: [...constantRoutes, ...asyncRoutes, {
     path: '/:pathMatch(.*)*',
     name: '404',

@@ -3,6 +3,7 @@ const RouteView = () => import('@/router/RouteView.vue')
 import contentEngineRoutes from '@skills/contentengine/routes-v2'
 import quoteCnRoutes from '@skills/quotecn/routes-v2'
 import invoiceRoutes from '@skills/invoice/routes-v2'
+import leadledgerRoutes from '@skills/leadledger/routes'
 
 export const defaultRedirect = '/index'
 
@@ -24,16 +25,20 @@ export const asyncRoutes = [
         path: '/crm/customer',
         name: 'customer',
         component: RouteView,
-        redirect: '/crm/customer/index',
+        redirect: '/crm/customer/today-visit',
         meta: { title: '客户管理', icon: 'user', permission: ['/crm/customer'] },
         children: [
+          { path: '/crm/customer/today-visit', name: 'today-visit', component: () => import('@/views/crm/customer/TodayVisit.vue'), meta: { title: '今日拜访', permission: ['/crm/customer/today-visit'] } },
           { path: '/crm/customer/index', name: 'customer-list', component: () => import('@/views/crm/customer/Index.vue'), meta: { title: '客户列表', permission: ['/crm/customer/index', '/crm/customer/lists'] } },
           { path: '/crm/customer/pool', name: 'customer-pool', component: () => import('@/views/crm/customer/pool.vue'), meta: { title: '公海池', permission: ['/crm/customer/pool', '/crm/customer/poolLists'] } },
           { path: '/crm/customer/collab', name: 'customer-collab', component: () => import('@/views/crm/customer/collab.vue'), meta: { title: '协作客户', permission: ['/crm/customer/collab', '/crm/customer/collabLists'] } },
           { path: '/crm/customer/detail', name: 'customer-detail', component: () => import('@/views/crm/customer/detail.vue'), meta: { title: '客户详情', permission: ['/crm/customer/detail'], hidden: true } },
           { path: '/crm/customer/create', name: 'customer-create', component: () => import('@/views/crm/customer/create.vue'), meta: { title: '新增客户', permission: ['/crm/customer/create'] } },
+          
           { path: '/crm/lead/index', name: 'lead-list', component: () => import('@/views/crm/lead/Index.vue'), meta: { title: '线索管理', permission: ['/crm/lead/index', '/crm/lead/lists'] } },
           { path: '/crm/lead/detail', name: 'lead-detail', component: () => import('@/views/crm/lead/detail.vue'), meta: { title: '线索详情', permission: ['/crm/lead/detail'], hidden: true } },
+          { path: '/crm/contact/index', name: 'contact-list', component: () => import('@/views/crm/contact/Index.vue'), meta: { title: '联系人管理', permission: ['/crm/contact/index', '/crm/contact/list'] } },
+          { path: '/crm/contact/detail', name: 'contact-detail', component: () => import('@/views/crm/contact/detail.vue'), meta: { title: '联系人详情', permission: ['/crm/contact/detail'], hidden: true } },
         ],
       },
       // ========== 销售管理（报价+订单+合同） ==========
@@ -77,9 +82,11 @@ export const asyncRoutes = [
         path: '/app',
         name: 'app',
         component: RouteView,
-        redirect: '/app/invoice/list',
+        redirect: '/app/leadledger/lead',
         meta: { title: '应用', icon: 'appstore', permission: ['/app'] },
         children: [
+          
+          ...leadledgerRoutes,
           ...invoiceRoutes,
         ],
       },
