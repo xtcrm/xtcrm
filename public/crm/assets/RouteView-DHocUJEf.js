@@ -1,0 +1,1 @@
+import{f as e,z as t}from"./runtime-core.esm-bundler-Czu1ZUPD.js";import{t as n}from"./TabPageView-CJf5Q5-Z.js";var r={__name:`RouteView`,setup(r){return(r,i)=>(t(),e(n))}};export{r as default};

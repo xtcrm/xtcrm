@@ -56,12 +56,25 @@ class Tenant
         $skipRoutes = [
             'crm.passport/login'           => ['POST'],
             'crm.passport/logout'          => ['POST'],
-            'passport/login'               => ['POST'],
+            'crm.passport/check'           => ['GET'],
+            'crm.auth/login'               => ['POST'],
+            'crm.auth/logout'              => ['POST'],
+            'passport/login'               => ['POST'], 
             'passport/logout'              => ['POST'],
             'passport/wxworkCallback'      => ['GET'],
             'passport/wxworkLogin'         => ['GET'],
             'passport/getWxworkConfig'     => ['GET'],
+            'leadledger.open/formConfig'   => ['GET'],
+            'leadledger.open/submit'       => ['POST'],
+            'ai.openclaw/script'           => ['GET'],
+            'ai.openclaw/nodeActivate'     => ['POST'],
+            'ai.openclaw/nodeHeartbeat'    => ['POST'],
         ];
+
+        // 官网公开 API 全部放行（token 自行鉴权）
+        if (str_starts_with($pathInfo, 'website.') && !str_starts_with($pathInfo, 'website.admin')) {
+            return true;
+        }
 
         return isset($skipRoutes[$pathInfo]) && in_array($method, $skipRoutes[$pathInfo]);
     }

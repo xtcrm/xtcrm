@@ -7,14 +7,17 @@ use mpp\crm\service\FollowUpService;
 class FollowUp extends BaseController
 {
     protected $methodRules = [
-        'lists' => 'GET', 'todayVisits' => 'GET', 'weekVisits' => 'GET', 'calendarEvents' => 'GET', 'greeting' => 'POST', 'add' => 'POST', 'edit' => 'POST', 'delete' => 'POST',
+        'lists' => 'GET', 'todayVisits' => 'GET', 'weekVisits' => 'GET', 'calendarEvents' => 'GET',
+        'greeting' => 'POST', 'greetings' => 'GET',
+        'add' => 'POST', 'edit' => 'POST', 'delete' => 'POST',
+        'eventAdd' => 'POST', 'eventEdit' => 'POST', 'eventDelete' => 'POST',
     ];
 
     /** 今日拜访列表 */
     public function todayVisits()
     {
-        $userId = $this->request->param('user_id', 0);
-        $result = FollowUpService::todayVisits($this->storeId, intval($userId));
+        $userId = $this->resolveUserId(intval($this->request->param('user_id', 0)));
+        $result = FollowUpService::todayVisits($this->storeId, $userId);
         return $this->renderSuccess($result);
     }
 
@@ -23,9 +26,23 @@ class FollowUp extends BaseController
     {
         $start = $this->request->param('start', '');
         $end = $this->request->param('end', '');
-        $userId = intval($this->request->param('user_id', 0));
+        $userId = $this->resolveUserId(intval($this->request->param('user_id', 0)));
         $result = FollowUpService::weekVisits($this->storeId, $start, $end, $userId);
         return $this->renderSuccess($result);
+    }
+
+    /** 统一获取已保存的祝福语（所有事件类型） */
+    public function greetings()
+    {
+        $start = $this->request->param('start', date('Y-m-01'));
+        $end = $this->request->param('end', date('Y-m-t'));
+        $list = \think\facade\Db::name('crm_calendar_greeting')
+            ->where('store_id', $this->storeId)
+            ->where('event_date', '>=', $start)
+            ->where('event_date', '<=', $end)
+            ->field('event_type, event_date, target_id, greeting')
+            ->select()->toArray();
+        return $this->renderSuccess(['list' => $list]);
     }
 
     /** AI 生成祝福语 */
@@ -98,9 +115,24 @@ class FollowUp extends BaseController
     {
         $start = $this->request->param('start', '');
         $end = $this->request->param('end', '');
-        $userId = intval($this->request->param('user_id', 0));
-        $result = FollowUpService::calendarEvents($this->storeId, $start, $end, $userId);
+        $userId = $this->resolveUserId(intval($this->request->param('user_id', 0)));
+        $customerId = intval($this->request->param('customer_id', 0));
+        $result = FollowUpService::calendarEvents($this->storeId, $start, $end, $userId, $customerId);
         return $this->renderSuccess($result);
+    }
+
+    /**
+     * 解析 userId：显式传参优先；非超管自动限制为当前用户
+     * PC 后台 token 缓存不含 is_super，需从 DB 查询
+     */
+    private function resolveUserId(int $explicitUserId): int
+    {
+        if ($explicitUserId > 0) return $explicitUserId;
+        $user = \app\platform\auth\TokenService::getUser();
+        if (empty($user['is_super'])) {
+            return $this->getUserId();
+        }
+        return 0;
     }
 
     protected function getUserId(): int
@@ -142,5 +174,61 @@ class FollowUp extends BaseController
         $result = (new FollowUpService())->delete($id, $this->getUserId());
         if ($result['success']) return $this->renderSuccess([], '删除成功');
         return $this->renderError($result['error']);
+    }
+
+    /** 自定义日历事件 — 新增 */
+    public function eventAdd()
+    {
+        $data = $this->postData();
+        $data['owner_user_id'] = $this->getUserId();
+        \think\facade\Db::name('crm_calendar_event')->insert([
+            'store_id' => $this->storeId,
+            'title' => $data['title'] ?? '',
+            'event_date' => $data['event_date'] ?? date('Y-m-d'),
+            'end_date' => $data['end_date'] ?: null,
+            'repeat_type' => $data['repeat_type'] ?? 'none',
+            'repeat_rule' => $data['repeat_rule'] ? json_encode($data['repeat_rule']) : null,
+            'color' => $data['color'] ?? 'blue',
+            'is_lunar' => intval($data['is_lunar'] ?? 0),
+            'content' => $data['content'] ?? '',
+            'customer_id' => intval($data['customer_id'] ?? 0),
+            'owner_user_id' => $data['owner_user_id'] ?? 0,
+            'create_time' => time(),
+            'update_time' => time(),
+        ]);
+        return $this->renderSuccess([], '添加成功');
+    }
+
+    /** 自定义日历事件 — 编辑 */
+    public function eventEdit()
+    {
+        $data = $this->postData();
+        $id = intval($data['id'] ?? 0);
+        if ($id <= 0) return $this->renderError('参数错误');
+        \think\facade\Db::name('crm_calendar_event')
+            ->where('id', $id)->where('store_id', $this->storeId)
+            ->update([
+                'title' => $data['title'] ?? '',
+                'event_date' => $data['event_date'] ?? date('Y-m-d'),
+                'end_date' => $data['end_date'] ?: null,
+                'repeat_type' => $data['repeat_type'] ?? 'none',
+                'repeat_rule' => $data['repeat_rule'] ? json_encode($data['repeat_rule']) : null,
+                'color' => $data['color'] ?? 'blue',
+                'content' => $data['content'] ?? '',
+                'customer_id' => intval($data['customer_id'] ?? 0),
+                'update_time' => time(),
+            ]);
+        return $this->renderSuccess([], '更新成功');
+    }
+
+    /** 自定义日历事件 — 删除 */
+    public function eventDelete()
+    {
+        $id = intval($this->request->param('id', 0));
+        if ($id <= 0) return $this->renderError('参数错误');
+        \think\facade\Db::name('crm_calendar_event')
+            ->where('id', $id)->where('store_id', $this->storeId)
+            ->update(['is_delete' => 1, 'update_time' => time()]);
+        return $this->renderSuccess([], '删除成功');
     }
 }

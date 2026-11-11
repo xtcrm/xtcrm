@@ -14,6 +14,9 @@ class InsightService extends BaseService
 {
     // 默认配置
     protected $config = [
+        // 公海自动回收默认关闭；关闭时不产出"即将掉入公海"预警
+        'pool_enabled' => 0,
+        'pool_days' => 180,
         'repurchase_threshold' => 0.8,
         'quotation_overdue_days' => 7,
         'pool_warning_days' => 7,
@@ -44,6 +47,8 @@ class InsightService extends BaseService
         }
         // 映射 config_name → insight 参数
         $map = [
+            'pool_enabled' => 'pool_enabled',
+            'pool_days' => 'pool_days',
             'insight_repurchase_threshold' => 'repurchase_threshold',
             'insight_quotation_overdue_days' => 'quotation_overdue_days',
             'insight_pool_warning_days' => 'pool_warning_days',
@@ -64,6 +69,14 @@ class InsightService extends BaseService
     {
         $this->loadConfig($storeId);
         $stats = ['cold_start' => false, 'cleaned' => 0, 'generated' => 0, 'rules' => []];
+
+        // 公海规则关闭时，历史生成的“即将掉入公海”预警不再成立，一并置为已解决，避免面板继续误导
+        if (empty($this->config['pool_enabled'])) {
+            InsightModel::where('store_id', $storeId)
+                ->where('type', 'pool_warning')
+                ->where('status', 'active')
+                ->update(['status' => 'resolved', 'update_time' => time()]);
+        }
 
         // 0. 冷启动检查
         $customerCount = Db::name('crm_customer')
@@ -95,7 +108,15 @@ class InsightService extends BaseService
         // 4. 限制每人每日最大 insight 数
         $allInsights = $this->limitPerUser($allInsights);
 
-        // 5. 批量 upsert
+        // 5. 需求规则扫描
+        $demandHits = 0;
+        try {
+            $demandSvc = new \mpp\crm\service\DemandService();
+            $demandHits = $demandSvc->dailyScan($storeId);
+        } catch (\Throwable $e) {}
+        $stats['demand_hits'] = $demandHits;
+
+        // 6. 批量 upsert
         $stats['generated'] = $this->batchUpsertInsights($allInsights);
         $stats['rules'] = $this->countByRule($allInsights);
 
@@ -125,6 +146,14 @@ class InsightService extends BaseService
             'customer_released'   => ['pool_warning'],
             'order_status_changed'=> ['churn_risk'],
         ];
+        // 客户变更 → 实时重评估需求规则
+        if (in_array($eventType, ['customer_created', 'customer_updated'])) {
+            try {
+                $storeId = \think\facade\Request::instance()->storeId ?? 0;
+                (new \mpp\crm\service\DemandService())->evaluateCustomer($targetId, $storeId);
+            } catch (\Throwable $e) {}
+        }
+
         $types = $map[$eventType] ?? [];
         foreach ($types as $type) {
             InsightModel::where('type', $type)
@@ -206,9 +235,10 @@ class InsightService extends BaseService
         ]];
     }
 
-    /** 公海预警：即将掉入公海 */
+    /** 公海预警：即将掉入公海（公海规则关闭时不产出） */
     protected function scanPoolWarning(array $customer): array
     {
+        if (empty($this->config['pool_enabled'])) return [];
         if ($customer['owner_user_id'] == 0) return [];
         $poolDays = $this->getPoolDays($customer['store_id']);
         $lastFollowup = $customer['last_followup_time'] ?: $customer['create_time'];
@@ -406,16 +436,12 @@ class InsightService extends BaseService
         return $byCustomer;
     }
 
-    // ============ 辅助方法 ============
+    // ============ 辅助方法 ============ 
 
     protected function getPoolDays(int $storeId): int
     {
-        $config = Db::name('config')
-            ->where('store_id', 0)
-            ->where('config_type', 'crm_setting')
-            ->where('config_name', 'pool_days')
-            ->value('config_value');
-        return intval($config ?: 180);
+        // 走 loadConfig() 载入的值（租户优先、全局兜底）；之前只读 store_id=0，租户配置不生效
+        return intval($this->config['pool_days'] ?? 180) ?: 180;
     }
 
     protected function createOnboardingInsights(int $storeId): void

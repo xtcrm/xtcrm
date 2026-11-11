@@ -1,32 +1,22 @@
 <template>
-  <a-card :bordered="false">
-    <div class="table-page-search-wrapper">
-      <a-form layout="inline">
-        <a-row :gutter="24">
-          <a-col :md="8">
-            <a-form-item label="订单号">
-              <a-input v-model:value="queryParam.order_no" allow-clear />
-            </a-form-item>
-          </a-col>
-          <a-col :md="8">
-            <a-form-item label="状态">
-              <a-select v-model:value="queryParam.status" allow-clear placeholder="全部">
-                <a-select-option value="">全部</a-select-option>
-                <a-select-option :value="1">待确认</a-select-option>
-                <a-select-option :value="2">生产中</a-select-option>
-                <a-select-option :value="3">待发货</a-select-option>
-                <a-select-option :value="4">已发货</a-select-option>
-                <a-select-option :value="5">已完成</a-select-option>
-                <a-select-option :value="6">已取消</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :md="8">
-            <a-button type="primary" @click="loadData(true)">查询</a-button>
-            <a-button style="margin-left:8px" @click="resetSearch">重置</a-button>
-          </a-col>
-        </a-row>
-      </a-form>
+  <a-card :bordered="false" class="order-page">
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <div class="action-left">
+        <a-input v-model:value="queryParam.customer_name" placeholder="搜索客户名称..." allow-clear style="width:200px" @pressEnter="loadData(true)" />
+        <a-select v-model:value="queryParam.status" placeholder="状态" allow-clear style="width:110px" @change="loadData(true)">
+          <a-select-option value="">全部</a-select-option>
+          <a-select-option :value="1">待确认</a-select-option>
+          <a-select-option :value="2">生产中</a-select-option>
+          <a-select-option :value="3">待发货</a-select-option>
+          <a-select-option :value="4">已发货</a-select-option>
+          <a-select-option :value="5">已完成</a-select-option>
+          <a-select-option :value="6">已取消</a-select-option>
+        </a-select>
+      </div>
+      <div class="action-right">
+        <a-button type="primary" @click="handleAdd"><template #icon><plus-outlined /></template>新增订单</a-button>
+      </div>
     </div>
 
     <a-table :columns="columns" :data-source="dataSource" :loading="loading" :pagination="pagination"
@@ -44,12 +34,15 @@
         <template v-else-if="column.key === 'action'">
           <a @click="handleDetail(record)">详情</a>
           <a-divider type="vertical" />
+          <a @click="handleEdit(record)">编辑</a>
+          <a-divider type="vertical" />
           <a-popconfirm title="确认删除?" @confirm="handleDelete(record)">
             <a style="color:#ff4d4f">删除</a>
           </a-popconfirm>
         </template>
       </template>
     </a-table>
+    <OrderForm v-model:open="formVisible" :mdl="selected" @ok="onFormOk" />
   </a-card>
 </template>
 
@@ -57,12 +50,16 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getList, deleteById } from '@/api/crm/order'
+import { PlusOutlined } from '@ant-design/icons-vue'
+import { getList, getDetail, deleteById } from '@/api/crm/order'
+import OrderForm from './components/OrderForm.vue'
 
 const router = useRouter()
 const loading = ref(false)
 const dataSource = ref([])
 const queryParam = reactive({})
+const formVisible = ref(false)
+const selected = ref(null)
 const pagination = reactive({ current: 1, pageSize: 15, total: 0, showSizeChanger: true, showTotal: t => `共 ${t} 条` })
 
 const columns = [
@@ -75,7 +72,7 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
   { title: '付款', dataIndex: 'payment_status', key: 'payment_status', width: 80,
     customRender: ({ text }) => ['', '未付', '部分', '已付'][text] || '' },
-  { title: '操作', key: 'action', width: 120 },
+  { title: '操作', key: 'action', width: 180 },
 ]
 
 async function loadData(reset = false) {
@@ -94,8 +91,19 @@ async function loadData(reset = false) {
 
 function onTableChange(pag) { pagination.current = pag.current; pagination.pageSize = pag.pageSize; loadData() }
 function handleDetail(r) { router.push({ path: '/crm/order/detail', query: { id: r.id } }) }
+function handleAdd() { selected.value = null; formVisible.value = true }
+function handleEdit(r) {
+  getDetail(r.id).then(res => { selected.value = res?.data?.detail || res?.data; formVisible.value = true })
+}
+function onFormOk() { formVisible.value = false; loadData() }
 async function handleDelete(r) { await deleteById(r.id); message.success('删除成功'); loadData() }
 function resetSearch() { Object.keys(queryParam).forEach(k => delete queryParam[k]); loadData(true) }
 
 onMounted(() => { loadData() })
 </script>
+<style scoped>
+.action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #fff; border-radius: 6px; border: 1px solid #f0f0f0; }
+.action-left { display: flex; gap: 10px; align-items: center; }
+.action-right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.order-page :deep(.ant-card-body) { padding: 24px; }
+</style>

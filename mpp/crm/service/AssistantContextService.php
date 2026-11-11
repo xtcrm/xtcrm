@@ -50,10 +50,10 @@ class AssistantContextService
         // ④ 本月业绩
         $monthQuotation = Db::name('crm_quotation')->where('store_id', $storeId)
             ->where('create_time', '>=', $monthStart)->sum('final_amount');
-        $monthOrder = Db::name('crm_order')->where('store_id', $storeId)
-            ->where('create_time', '>=', $monthStart)->sum('final_amount');
-        $ctx[] = "本月业绩：报价总额" . ($monthQuotation ? number_format($monthQuotation / 10000, 1) . '万' : '0')
-            . "，订单总额" . ($monthOrder ? number_format($monthOrder / 10000, 1) . '万' : '0');
+        $monthCommission = Db::name('crm_commission_record')->where('store_id', $storeId)
+            ->where('confirm_month', date('Y-m'))->sum('amount');
+        $ctx[] = "本月业绩（按回款确认）：" . ($monthCommission ? number_format($monthCommission / 10000, 1) . '万' : '0')
+            . "；报价总额" . ($monthQuotation ? number_format($monthQuotation / 10000, 1) . '万' : '0');
 
         // ⑤ 我的客户
         if ($userId > 0) {

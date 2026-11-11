@@ -6,8 +6,15 @@ import { usePermissionStore } from '@/stores/permission'
 
 NProgress.configure({ showSpinner: false })
 
+let progressTimer = null
+let progressStarted = false
+
 router.beforeEach(async (to) => {
-  NProgress.start()
+  clearTimeout(progressTimer)
+  progressTimer = setTimeout(() => {
+    NProgress.start()
+    progressStarted = true
+  }, 300)
 
   const userStore = useUserStore()
   const permissionStore = usePermissionStore()
@@ -47,6 +54,10 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to) => {
+  clearTimeout(progressTimer)
+  if (progressStarted) {
+    NProgress.done()
+    progressStarted = false
+  }
   console.log('[guard] done ->', to.path)
-  NProgress.done()
 })

@@ -3,7 +3,7 @@
 -- =============================================
 
 -- 迁移追踪表
-CREATE TABLE IF NOT EXISTS `tao_skill_migration` (
+CREATE TABLE IF NOT EXISTS `yoshop_skill_migration` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `skill_name` varchar(50) NOT NULL DEFAULT '',
   `version` varchar(50) NOT NULL DEFAULT '',
@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS `tao_skill_migration` (
   KEY `idx_skill_version` (`skill_name`, `version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Skill迁移记录';
 
-DROP TABLE IF EXISTS `tao_invoice_company`;
-CREATE TABLE `tao_invoice_company` (
+DROP TABLE IF EXISTS `yoshop_invoice_company`;
+CREATE TABLE `yoshop_invoice_company` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `store_id` int(11) NOT NULL DEFAULT '0' COMMENT '租户ID',
   `name` varchar(200) NOT NULL DEFAULT '' COMMENT '销方公司名称',
@@ -35,8 +35,8 @@ CREATE TABLE `tao_invoice_company` (
   UNIQUE KEY `uniq_store_tax` (`store_id`, `tax_number`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='销方公司档案';
 
-DROP TABLE IF EXISTS `tao_invoice_company_member`;
-CREATE TABLE `tao_invoice_company_member` (
+DROP TABLE IF EXISTS `yoshop_invoice_company_member`;
+CREATE TABLE `yoshop_invoice_company_member` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `store_id` int(11) NOT NULL DEFAULT '0' COMMENT '租户ID',
   `company_id` int(11) NOT NULL DEFAULT '0' COMMENT '公司ID',
@@ -50,8 +50,8 @@ CREATE TABLE `tao_invoice_company_member` (
   UNIQUE KEY `uniq_company_member` (`company_id`, `member_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公司会员绑定';
 
-DROP TABLE IF EXISTS `tao_invoice_record`;
-CREATE TABLE `tao_invoice_record` (
+DROP TABLE IF EXISTS `yoshop_invoice_record`;
+CREATE TABLE `yoshop_invoice_record` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `store_id` int(11) NOT NULL DEFAULT '0' COMMENT '租户ID',
   `member_id` int(11) NOT NULL DEFAULT '0' COMMENT '销方会员ID(申请人)',

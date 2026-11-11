@@ -1,5 +1,14 @@
 <template>
   <a-card :bordered="false" class="customer-page">
+    <!-- 视图切换 -->
+    <div class="view-tabs">
+      <a-radio-group v-model:value="viewMode" size="large" button-style="solid" @change="loadData(true)">
+        <a-radio-button value="all">全部客户</a-radio-button>
+        <a-radio-button value="mine">我的客户</a-radio-button>
+        <a-radio-button value="others">同事客户</a-radio-button>
+      </a-radio-group>
+    </div>
+
     <!-- 统计卡片 -->
     <a-row :gutter="16" class="stats-row">
       <a-col :span="6">
@@ -32,28 +41,30 @@
     <div class="action-bar">
       <div class="action-left">
         <a-input-search
-          v-model:value="queryParam.customer_name"
+          v-model:value="queryParam.keyword"
           placeholder="搜索客户名称..."
-          style="width: 280px"
+          style="width: 240px"
           allow-clear
           @search="loadData(true)"
         />
         <a-select
-          v-model:value="queryParam.status"
-          placeholder="客户状态"
+          v-model:value="queryParam.owner_user_id"
+          placeholder="所属人员"
           allow-clear
-          style="width: 120px"
+          show-search
+          :filter-option="filterUserOption"
+          style="width: 150px"
           @change="loadData(true)"
         >
-          <a-select-option value="">全部状态</a-select-option>
-          <a-select-option :value="1">正常</a-select-option>
-          <a-select-option :value="0">停用</a-select-option>
+          <a-select-option v-for="u in storeUsers" :key="u.store_user_id" :value="u.store_user_id">
+            {{ u.real_name || u.user_name }}
+          </a-select-option>
         </a-select>
         <a-select
           v-model:value="queryParam.funnel_stage"
           placeholder="漏斗阶段"
           allow-clear
-          style="width: 130px"
+          style="width: 120px"
           @change="loadData(true)"
         >
           <a-select-option value="">全部阶段</a-select-option>
@@ -63,24 +74,103 @@
           <a-select-option :value="4">谈判</a-select-option>
           <a-select-option :value="5">成交</a-select-option>
         </a-select>
+        <a-select
+          v-model:value="queryParam.status"
+          placeholder="客户状态"
+          allow-clear
+          style="width: 100px"
+          @change="loadData(true)"
+        >
+          <a-select-option value="">全部状态</a-select-option>
+          <a-select-option :value="1">正常</a-select-option>
+          <a-select-option :value="0">停用</a-select-option>
+        </a-select>
+        <a-button type="link" size="small" @click="showMore = !showMore">
+          更多筛选 <DownOutlined :rotate="showMore ? 180 : 0" />
+        </a-button>
       </div>
       <div class="action-right">
-        <a-input-search
-          v-model:value="aiQuery"
-          placeholder="AI智能搜索..."
-          style="width: 240px"
-          :loading="aiSearching"
-          @search="handleAiSearch"
-        >
-          <template #enterButton>
-            <a-button type="primary" :loading="aiSearching">🤖</a-button>
-          </template>
-        </a-input-search>
         <a-button type="primary" @click="handleAdd">
           <template #icon><plus-outlined /></template>
           新增客户
         </a-button>
+        <a-button @click="importVisible = true">
+          <template #icon><upload-outlined /></template>
+          导入
+        </a-button>
       </div>
+      <ImportModal :open="importVisible" @update:open="importVisible = false" @ok="loadData(true)" />
+    </div>
+
+    <!-- 更多筛选（可折叠） -->
+    <div v-if="showMore" class="filter-row">
+      <a-select
+        v-model:value="queryParam.industry_id"
+        placeholder="行业"
+        allow-clear
+        style="width: 120px"
+        @change="loadData(true)"
+      >
+        <a-select-option v-for="op in dictOptions.industry" :key="op.value" :value="op.value">{{ op.name }}</a-select-option>
+      </a-select>
+      <a-select
+        v-model:value="queryParam.group_id"
+        placeholder="客户分组"
+        allow-clear
+        style="width: 130px"
+        @change="loadData(true)"
+      >
+        <a-select-option v-for="op in dictOptions.customer_group" :key="op.value" :value="op.value">{{ op.name }}</a-select-option>
+      </a-select>
+      <a-select
+        v-model:value="queryParam.level_id"
+        placeholder="客户等级"
+        allow-clear
+        style="width: 130px"
+        @change="loadData(true)"
+      >
+        <a-select-option v-for="op in dictOptions.customer_level" :key="op.value" :value="op.value">{{ op.name }}</a-select-option>
+      </a-select>
+      <a-select
+        v-model:value="queryParam.source_id"
+        placeholder="客户来源"
+        allow-clear
+        style="width: 120px"
+        @change="loadData(true)"
+      >
+        <a-select-option v-for="op in dictOptions.customer_source" :key="op.value" :value="op.value">{{ op.name }}</a-select-option>
+      </a-select>
+      <a-select
+        v-model:value="queryParam.tag_ids"
+        placeholder="标签"
+        allow-clear
+        mode="multiple"
+        style="width: 200px"
+        @change="loadData(true)"
+      >
+        <a-select-opt-group v-for="g in tagFilterGroups" :key="'g'+g.id" :label="g.name">
+          <a-select-option v-for="t in g.tags" :key="'t'+t.id" :value="t.id">
+            <a-tag :color="t.color" style="margin:0">{{ t.name }}</a-tag>
+          </a-select-option>
+        </a-select-opt-group>
+      </a-select>
+    </div>
+
+    <!-- 批量操作栏 -->
+    <div v-if="selectedRowKeys.length" class="batch-bar">
+      <span class="batch-info">已选 <strong>{{ selectedRowKeys.length }}</strong> 条</span>
+      <a-select v-model:value="batchField" placeholder="修改字段" style="width:120px" size="small">
+        <a-select-option value="customer_group">客户分组</a-select-option>
+        <a-select-option value="source">客户来源</a-select-option>
+        <a-select-option value="level_name">客户等级</a-select-option>
+        <a-select-option value="industry">客户行业</a-select-option>
+      </a-select>
+      <a-select v-model:value="batchValue" placeholder="选择新值" style="width:150px" size="small" :options="batchOptions" />
+      <a-button size="small" type="primary" :loading="batchSaving" @click="handleBatchUpdate">应用</a-button>
+      <a-popconfirm title="确定删除选中客户？" @confirm="handleBatchDelete">
+        <a-button size="small" danger :loading="batchDeleting">批量删除</a-button>
+      </a-popconfirm>
+      <a-button size="small" @click="selectedRowKeys=[]">取消</a-button>
     </div>
 
     <!-- 表格 -->
@@ -89,6 +179,7 @@
       :data-source="dataSource"
       :loading="loading"
       :pagination="pagination"
+      :row-selection="{ selectedRowKeys, onChange: (keys) => selectedRowKeys = keys }"
       :row-key="r => r.id"
       size="middle"
       class="customer-table"
@@ -139,25 +230,81 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, onActivated } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+const userStore = useUserStore()
 import { message } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
-import { getList, getDetail, deleteById, smartSearch } from '@/api/crm/customer'
+import { PlusOutlined, UploadOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { getList, getDetail, deleteById, batchUpdate, batchDelete } from '@/api/crm/customer'
 import { getIndex } from '@/api/crm/dashboard'
+import { getAll as getConfigs } from '@/api/crm/config'
+import { getAllByTarget } from '@/api/crm/tag'
+import { list as getStoreUsers } from '@/api/user'
 import CustomerForm from './components/CustomerForm.vue'
+import ImportModal from './Import.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const dataSource = ref([])
-const queryParam = reactive({})
+const queryParam = reactive({ tag_ids: [] })
+
+// 首页漏斗带 ?funnel_stage=N 跳进来。页签被我归一成同一个「客户列表」，
+// 缓存页不会再 mount，所以阶段筛选要在 activated 时同步。
+function routeFunnelStage() {
+  const n = parseInt(route.query.funnel_stage)
+  return n >= 1 && n <= 5 ? n : 0
+}
+let appliedRouteStage = routeFunnelStage()
+if (appliedRouteStage) queryParam.funnel_stage = appliedRouteStage
+const viewMode = ref(userStore.isSuper ? 'all' : 'mine')
 const followFilter = ref(0)
-const aiQuery = ref('')
-const aiSearching = ref(false)
 const formVisible = ref(false)
+const importVisible = ref(false)
 const selected = ref(null)
+const selectedRowKeys = ref([])
+const batchField = ref('customer_group')
+const batchValue = ref('')
+const tagFilterGroups = ref([])
+const batchSaving = ref(false)
+const batchDeleting = ref(false)
 const stats = reactive({ pendingFollowup: 0, newCustomers: 0, poolCount: 0 })
+const dictOptions = reactive({ industry: [], customer_level: [], customer_source: [], customer_group: [] })
+const showMore = ref(false)
+const storeUsers = ref([])
+
+function loadDicts() {
+  getConfigs().then(res => {
+    const data = res?.data || {}
+    const toOpts = (arr) => (arr || []).filter(i => i.config_value).map(i => ({ value: parseInt(i.config_value), name: i.config_name }))
+    dictOptions.industry = toOpts(data.industry)
+    dictOptions.customer_level = toOpts(data.customer_level)
+    dictOptions.customer_source = toOpts(data.customer_source)
+    dictOptions.customer_group = toOpts(data.customer_group)
+  })
+}
+
+function loadUsers() {
+  getStoreUsers({}).then(res => {
+    const list = res?.data?.list?.data || res?.data?.list || []
+    storeUsers.value = list.filter(u => u.is_supplier !== 1)
+  }).catch(() => {})
+}
+
+function filterUserOption(input, option) {
+  return (option.label || option.value || '').toLowerCase().includes(input.toLowerCase())
+}
+
+const DICT_MAP = { customer_group: 'customer_group', source: 'customer_source', level_name: 'customer_level', industry: 'industry' }
+const batchOptions = computed(() => (dictOptions[DICT_MAP[batchField.value]] || []).map(o => ({ label: o.name, value: o.name })))
+
+function loadTagFilterOptions() {
+  getAllByTarget('customer').then(res => {
+    tagFilterGroups.value = res?.data?.list || []
+  }).catch(e => { console.error('loadTagFilterOptions failed:', e) })
+}
 
 function loadStats() {
   getIndex().then(res => {
@@ -177,14 +324,14 @@ const pagination = reactive({
 
 const columns = [
   { title: '客户名称', key: 'customer_name', width: 260, sorter: true },
-  { title: '行业', dataIndex: 'industry', key: 'industry', width: 100 },
-  { title: '等级', dataIndex: 'level_name', key: 'level_name', width: 80, align: 'center' },
-  { title: '来源', dataIndex: 'source', key: 'source', width: 90 },
-  { title: '分组', dataIndex: 'customer_group', key: 'customer_group', width: 90 },
-  { title: '漏斗阶段', key: 'funnel_stage', width: 100, align: 'center' },
+  { title: '行业', dataIndex: 'industry', key: 'industry', width: 100, sorter: true },
+  { title: '等级', dataIndex: 'level_name', key: 'level_name', width: 80, align: 'center', sorter: true },
+  { title: '来源', dataIndex: 'source', key: 'source', width: 90, sorter: true },
+  { title: '分组', dataIndex: 'customer_group', key: 'customer_group', width: 90, sorter: true },
+  { title: '漏斗阶段', key: 'funnel_stage', width: 100, align: 'center', sorter: true },
   { title: '负责人', dataIndex: 'owner_user_name', key: 'owner_user_name', width: 90 },
-  { title: '跟进健康', key: 'health', width: 130 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 70, align: 'center' },
+  { title: '跟进健康', dataIndex: 'last_followup_time', key: 'health', width: 130, sorter: true },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 70, align: 'center', sorter: true },
   { title: '操作', key: 'action', width: 170, fixed: 'right' },
 ]
 
@@ -226,6 +373,12 @@ async function loadData(reset = false) {
   try {
     const params = { page: pagination.current, limit: pagination.pageSize, ...queryParam }
     if (followFilter.value > 0) params.follow_days = followFilter.value
+    // 视图过滤
+    if (viewMode.value === 'mine') {
+      params.owner_user_id = userStore.userInfo?.store_user_id || 0
+    } else if (viewMode.value === 'others') {
+      params.exclude_owner = userStore.userInfo?.store_user_id || 0
+    }
     const res = await getList(params)
     if (res?.status === 200) {
       const list = res.data?.list || {}
@@ -236,9 +389,11 @@ async function loadData(reset = false) {
   } finally { loading.value = false }
 }
 
-function onTableChange(pag) {
+function onTableChange(pag, filters, sorter) {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
+  queryParam.sort_field = sorter.field || sorter.columnKey
+  queryParam.sort_order = sorter.order === 'ascend' ? 'asc' : sorter.order === 'descend' ? 'desc' : undefined
   loadData()
 }
 
@@ -259,6 +414,25 @@ async function handleDelete(record) {
   if (res?.status === 200) { message.success('删除成功'); loadData() }
 }
 
+async function handleBatchUpdate() {
+  if (!selectedRowKeys.value.length) return message.warning('请选择客户')
+  if (!batchValue.value) return message.warning('请输入新值')
+  batchSaving.value = true
+  try {
+    const res = await batchUpdate({ ids: selectedRowKeys.value, field: batchField.value, value: batchValue.value })
+    if (res?.status === 200) { message.success(res.data?.msg || `已更新 ${res.data?.count || 0} 条`); selectedRowKeys.value = []; loadData() }
+  } finally { batchSaving.value = false }
+}
+
+async function handleBatchDelete() {
+  if (!selectedRowKeys.value.length) return
+  batchDeleting.value = true
+  try {
+    const res = await batchDelete(selectedRowKeys.value)
+    if (res?.status === 200) { message.success(`已删除 ${res.data?.count || 0} 条`); selectedRowKeys.value = []; loadData() }
+  } finally { batchDeleting.value = false }
+}
+
 function onFormOk() { formVisible.value = false; loadData() }
 
 function handleAiSearch(q) {
@@ -267,7 +441,7 @@ function handleAiSearch(q) {
   smartSearch(q).then(res => {
     if (res?.status === 200) {
       const filters = res.data?.filters || {}
-      if (filters.customer_name) queryParam.customer_name = filters.customer_name
+      if (filters.customer_name) queryParam.keyword = filters.customer_name
       if (filters.industry) queryParam.industry = filters.industry
       if (filters.level) queryParam.level_name = filters.level
       if (filters.source) queryParam.source = filters.source
@@ -284,10 +458,23 @@ function handleAiSearch(q) {
   }).catch(() => { aiSearching.value = false })
 }
 
-onMounted(() => { loadData(); loadStats() })
+onMounted(() => { loadDicts(); loadUsers(); loadData(); loadStats(); loadTagFilterOptions() })
+
+// 再次激活时对齐首页漏斗带过来的阶段（点普通「客户列表」页签则回到全部阶段）
+onActivated(() => {
+  const stage = routeFunnelStage()
+  if (stage === appliedRouteStage) return
+  appliedRouteStage = stage
+  if (stage) queryParam.funnel_stage = stage
+  else delete queryParam.funnel_stage
+  loadData(true)
+})
 </script>
 
 <style scoped>
+.view-tabs { margin-bottom: 12px; }
+.view-tabs :deep(.ant-radio-button-wrapper) { font-size: 15px; padding: 0 20px; height: 38px; line-height: 36px; }
+
 /* 统计卡片 */
 .stats-row { margin-bottom: 16px; }
 .stat-card {
@@ -307,8 +494,22 @@ onMounted(() => { loadData(); loadStats() })
   margin-bottom: 16px; padding: 12px 16px;
   background: #fff; border-radius: 6px; border: 1px solid #f0f0f0;
 }
-.action-left { display: flex; gap: 10px; align-items: center; }
-.action-right { display: flex; gap: 10px; align-items: center; }
+.action-left { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.action-right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+
+/* 折叠筛选行 */
+.filter-row {
+  display: flex; gap: 10px; align-items: center;
+  margin-bottom: 16px; padding: 10px 16px;
+  background: #fafafa; border-radius: 6px; border: 1px solid #f0f0f0;
+}
+
+.batch-bar {
+  display: flex; gap: 10px; align-items: center;
+  margin-bottom: 12px; padding: 8px 16px;
+  background: #e6f7ff; border-radius: 6px; border: 1px solid #91d5ff;
+}
+.batch-info { font-size: 13px; color: #333; margin-right: 8px; }
 
 /* 客户单元格 */
 .customer-cell { display: flex; align-items: center; gap: 10px; }

@@ -21,10 +21,13 @@ class MppAutoload
      * model/service 直接引用 mpp\* / skills\* 真实路径，不走这里
      */
     private static $mappings = [
+        ['app\\store\\controller\\', 'backend'],
         ['app\\platform\\controller\\', 'backend'],
-        ['app\\platform\\controller\\', 'api'],
         ['app\\api\\controller\\', 'api'],
+        ['app\\api\\controller\\', 'v1'],       // ⚠️ 兼容旧 opencrm URL /api → v1/（过渡期）
+        ['app\\v1\\controller\\', 'v1'],
         ['app\\timer\\controller\\', 'timer'],
+        ['app\\admin\\controller\\', 'backend'],
     ];
 
     public static function boot(): void

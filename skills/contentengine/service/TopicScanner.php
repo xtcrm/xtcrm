@@ -2,6 +2,7 @@
 namespace skills\contentengine\service;
 
 use think\facade\Db;
+use app\platform\ai\AiGateway;
 use skills\contentengine\model\CompanyProfile;
 use skills\contentengine\model\ContentKeyword;
 use skills\contentengine\model\Solution;
@@ -12,48 +13,19 @@ use skills\contentengine\model\Solution;
  */
 class TopicScanner
 {
-    /** 调用DeepSeek API（不经过AiService的500token限制） */
-    private function callAi(string $prompt): ?string
+    /** 调用全局 AI 配置（设置 → AI 配置），按租户隔离 */
+    private function callAi(string $prompt, int $storeId): ?string
     {
-        $rows = Db::name('config')
-            ->where('config_type', 'crm_setting')
-            ->whereIn('config_name', ['ai_api_url', 'ai_api_key', 'ai_model'])
-            ->select()->toArray();
-        $cfg = ['api_url' => 'https://api.deepseek.com/chat/completions', 'api_key' => '', 'model' => 'deepseek-chat'];
-        foreach ($rows as $r) {
-            if ($r['config_name'] === 'ai_api_url' && $r['config_value']) {
-                $url = $r['config_value'];
-                if (!str_contains($url, '/chat/completions')) $url = rtrim($url, '/') . '/v1/chat/completions';
-                $cfg['api_url'] = $url;
-            }
-            if ($r['config_name'] === 'ai_api_key') $cfg['api_key'] = $r['config_value'];
-            if ($r['config_name'] === 'ai_model' && $r['config_value']) $cfg['model'] = $r['config_value'];
-        }
-        if (empty($cfg['api_key'])) return null;
+        $resp = AiGateway::chat([
+            ['role' => 'system', 'content' => '你是内容选题编辑。只返回JSON数组，不要任何解释。'],
+            ['role' => 'user',   'content' => $prompt],
+        ], [
+            'temperature' => 0.4,
+            'max_tokens'  => 2000,
+            'timeout'     => 60,
+        ], $storeId);
 
-        $ch = curl_init($cfg['api_url']);
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode([
-                'model' => $cfg['model'],
-                'messages' => [
-                    ['role' => 'system', 'content' => '你是内容选题编辑。只返回JSON数组，不要任何解释。'],
-                    ['role' => 'user', 'content' => $prompt],
-                ],
-                'temperature' => 0.4,
-                'max_tokens' => 2000,
-            ], JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $cfg['api_key']],
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => false,
-        ]);
-        $resp = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($code !== 200) return null;
-        $body = json_decode($resp, true);
-        return trim($body['choices'][0]['message']['content'] ?? '') ?: null;
+        return $resp->success ? (trim((string)$resp->content) ?: null) : null;
     }
     /**
      * 扫描并生成选题（供定时任务和手动触发）
@@ -106,7 +78,7 @@ class TopicScanner
             . "直接返回JSON，不要其他文字。";
 
         // 4. 调用DeepSeek（直接调，需要更大token限额）
-        $content = $this->callAi($prompt);
+        $content = $this->callAi($prompt, $storeId);
         if ($content === null) {
             return ['success' => false, 'data' => null, 'error' => 'AI调用失败'];
         }

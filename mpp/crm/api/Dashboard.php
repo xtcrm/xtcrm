@@ -87,10 +87,44 @@ class Dashboard extends Base
         $unreadCount = Db::name('crm_notification')
             ->where('user_id', $userId)->where('is_read', 0)->count();
 
+        // 商机需求
+        $demandQuery = Db::name('crm_demand')
+            ->alias('d')
+            ->join('yoshop_crm_customer c', 'd.customer_id = c.id')
+            ->leftJoin('yoshop_crm_demand_rule r', 'd.rule_key = r.rule_key AND r.store_id = ' . $sid)
+            ->leftJoin('yoshop_store_user u', 'u.store_user_id = d.owner_user_id')
+            ->where('d.store_id', $sid)->where('d.status', 1)
+            ->field('d.id, d.customer_id, d.owner_user_id, d.rule_key, d.reason, d.create_time, c.customer_name, r.rule_name, r.priority, u.real_name as owner_user_name')
+            ->order('r.priority', 'asc')->order('d.create_time', 'desc')
+            ->limit(20);
+        if (empty($this->store['is_super']) && ($this->store['role_id'] ?? 0) !== 1) {
+            $demandQuery->where('d.owner_user_id', $userId);
+        }
+        $demands = $demandQuery->select()->toArray();
+
+        // 加载已保存的需求祝福语
+        $today = date('Y-m-d');
+        $greetings = Db::name('crm_calendar_greeting')
+            ->where('store_id', $sid)
+            ->where('event_type', 'demand')
+            ->where('event_date', $today)
+            ->select()->toArray();
+        $greetingMap = [];
+        foreach ($greetings as $g) {
+            $greetingMap[$g['target_id']] = $g['greeting'];
+        }
+        foreach ($demands as &$d) {
+            $key = 'dm' . $d['id'];
+            if (isset($greetingMap[$key])) {
+                $d['_greeting'] = $greetingMap[$key];
+            }
+        }
+        unset($d);
+
         return $this->renderSuccess(compact(
             'funnel', 'pendingFollowup', 'newCustomers',
             'monthQuotation', 'monthOrder', 'poolCount',
-            'recentFollows', 'insights', 'unreadCount'
+            'recentFollows', 'insights', 'unreadCount', 'demands'
         ));
     }
 }

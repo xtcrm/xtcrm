@@ -33,7 +33,7 @@ class ExceptionHandle extends Handle
     private function corsHeaders(): array
     {
         return [
-            'Access-Control-Allow-Origin'      => env('cors.allow_origin', '*'),
+            'Access-Control-Allow-Origin'      => '*',
             'Access-Control-Allow-Credentials'  => 'true',
             'Access-Control-Max-Age'            => 1800,
             'Access-Control-Allow-Methods'      => 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
@@ -147,12 +147,7 @@ class ExceptionHandle extends Handle
         $log .= "\r\n" . "[ message ] [{$data['status']}] {$data['message']}";
         $log .= "\r\n" . "[ file ] {$data['file']}:{$data['line']}";
         // $log .= "\r\n" . "[ time ] " . format_time(time());
-        // 脱敏敏感 header 后再记录
-        $headers = Request::header();
-        foreach (['access-token', 'authorization', 'cookie', 'x-csrf-token'] as $key) {
-            if (isset($headers[$key])) $headers[$key] = '[REDACTED]';
-        }
-        $log .= "\r\n" . '[ header ] ' . print_r($headers, true);
+        $log .= "\r\n" . '[ header ] ' . print_r(Request::header(), true);
         $log .= "" . '[ param ] ' . print_r(Request::param(), true);
         // 如果是数据库报错, 则记录sql语句
         if ($e instanceof PDOException) {

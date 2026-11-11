@@ -25,7 +25,7 @@ class Region extends BaseModel
     ];
 
     /** @var string 缓存版本号 */
-    private static $version = '1.0.3';
+    private static $version = '1.0.4';
 
     // ── 公开方法 ──
 
@@ -34,6 +34,61 @@ class Region extends BaseModel
         if ($id == 0) return '其他';
         $data = self::getCacheAll();
         return isset($data[$id]) ? $data[$id]['name'] : '其他';
+    }
+
+    /**
+     * 按行政区划代码（身份证前6位）解析省/市/区县名称
+     *
+     * @param string $code6 6位行政区划代码，如 110101
+     * @return array{province:string,city:string,district:string}
+     */
+    public static function getNamesByCode(string $code6): array
+    {
+        $result = ['province' => '', 'city' => '', 'district' => ''];
+        $code6 = substr(trim($code6), 0, 6);
+        if (strlen($code6) < 6) return $result;
+        // 旧行政区划代码 → 现行代码（身份证老号码的市/县一级对不上，先做一次映射）
+        $current      = self::resolveToCurrentCode($code6);
+        $provinceCode = substr($current, 0, 2) . '0000';
+        $cityCode     = substr($current, 0, 4) . '00';
+        foreach (self::getCacheAll() as $item) {
+            if ($item['code'] == $provinceCode) {
+                $result['province'] = $item['name'];
+            } elseif ($item['code'] == $cityCode) {
+                $result['city'] = $item['name'];
+            } elseif ($item['code'] == $current) {
+                $result['district'] = $item['name'];
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * 旧行政区划代码 → 现行代码（递归跟随后继，防环）
+     */
+    private static function resolveToCurrentCode(string $code6): string
+    {
+        $map  = self::getOldCodeMap();
+        $seen = [];
+        while (isset($map[$code6]) && !isset($seen[$code6])) {
+            $seen[$code6] = true;
+            $code6        = $map[$code6];
+        }
+        return $code6;
+    }
+
+    /**
+     * 旧→新行政区划代码映射（历史沿革数据，来源 GB/T 2260 代码变更）
+     */
+    private static function getOldCodeMap(): array
+    {
+        static $map = null;
+        if ($map === null) {
+            $file = __DIR__ . '/../data/region_old_codes.json';
+            $map  = is_file($file) ? json_decode((string)file_get_contents($file), true) : [];
+            if (!is_array($map)) $map = [];
+        }
+        return $map;
     }
 
     public static function getCacheTree(): array
@@ -84,7 +139,7 @@ class Region extends BaseModel
     private function loadAll(): array
     {
         $list = self::withoutGlobalScope()
-            ->field('id, pid, name, level')
+            ->field('id, pid, name, code, level')
             ->select()
             ->toArray();
         return Arr::columnToKey($list, 'id');

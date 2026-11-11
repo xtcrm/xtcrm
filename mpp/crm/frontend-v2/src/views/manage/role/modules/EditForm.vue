@@ -42,13 +42,33 @@ const rules = {
 }
 
 // === 角色树 ===
+// 上级不能选自己或自己的下级，否则会成环，后端也会拒绝
+function findRole(list, id) {
+  for (const r of list || []) {
+    if (r.role_id === id) return r
+    const f = findRole(r.children, id)
+    if (f) return f
+  }
+  return null
+}
+function collectRoleIds(list, acc = []) {
+  (list || []).forEach(r => { acc.push(r.role_id); collectRoleIds(r.children, acc) })
+  return acc
+}
+const blockedIds = computed(() => {
+  const rid = record.value?.role_id
+  if (!rid) return []
+  const self = findRole(props.roleList, rid)
+  return [rid, ...(self ? collectRoleIds(self.children) : [])]
+})
 const roleTree = computed(() => {
-  const build = (list, disabled) => list.map(r => ({
+  const blocked = blockedIds.value
+  const build = list => (list || []).map(r => ({
     title: r.role_name, key: r.role_id, value: r.role_id,
-    disabled,
-    children: r.children?.length ? build(r.children, disabled) : undefined,
+    disabled: blocked.includes(r.role_id),
+    children: r.children?.length ? build(r.children) : undefined,
   }))
-  return [{ title: '顶级角色', key: 0, value: 0, children: build(props.roleList, false) }]
+  return [{ title: '顶级角色', key: 0, value: 0, children: build(props.roleList) }]
 })
 
 // === 菜单树 ===

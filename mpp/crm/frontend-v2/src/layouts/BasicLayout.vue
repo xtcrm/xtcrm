@@ -92,6 +92,7 @@
           </a-breadcrumb>
         </div>
         <div class="hd-right">
+          <notification-bell />
           <a-dropdown placement="bottomRight">
             <span class="user-tag">
               <a-avatar size="small" style="background:#d6893b"><template #icon><user-outlined /></template></a-avatar>
@@ -109,16 +110,31 @@
         </div>
       </a-layout-header>
 
-      <a-layout-content class="main-content">
-        <router-view v-slot="{ Component }">
-          <transition name="page-fade" mode="out-in">
-            <keep-alive :include="keepAliveList">
-              <component :is="Component" />
-            </keep-alive>
-          </transition>
-        </router-view>
-      </a-layout-content>
+      <!-- 页签栏：一个客户一个页签，靠切页签代替来回导航 -->
+      <tab-bar />
+
+      <!-- 内容区 + AI 面板（flex row，面板打开时内容自动缩窄） -->
+      <div class="main-body">
+        <a-layout-content class="main-content">
+          <!-- 页面缓存/过渡都在 TabPageView 里，别在这里再包 keep-alive -->
+          <tab-page-view />
+        </a-layout-content>
+
+        <!-- AI 侧边面板 — 嵌入布局流，不是 fixed 浮层 -->
+        <div v-if="aiStore.panelOpen" class="ai-panel">
+          <div class="ai-panel-handle" @click="aiStore.togglePanel()" title="收起AI面板">
+            <right-outlined />
+          </div>
+          <AiPanel />
+        </div>
+      </div>
     </a-layout>
+
+    <!-- AI 面板收起时的侧边标签 -->
+    <div v-if="!aiStore.panelOpen" class="ai-panel-tab" @click="aiStore.togglePanel()" title="打开AI面板">
+      <RobotOutlined />
+      <span>AI</span>
+    </div>
 
     <!-- 修改密码弹窗 -->
     <a-modal :open="pwdVisible" title="修改密码" :confirm-loading="pwdSaving" @ok="handlePwdSubmit" @cancel="pwdVisible = false" :width="400">
@@ -143,10 +159,17 @@ import {
   DollarOutlined,
   AppstoreOutlined, SettingOutlined, DownOutlined,
   BulbOutlined, FileTextOutlined, FileProtectOutlined,
-  BookOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  BookOutlined, MenuFoldOutlined, MenuUnfoldOutlined, RightOutlined,
+  RobotOutlined, ProjectOutlined, BarChartOutlined, PieChartOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { usePermissionStore } from '@/stores/permission'
+import { useAiStore } from '@/stores/ai'
+import { useTabsStore } from '@/stores/tabs'
+import AiPanel from '@/components/AiPanel/index.vue'
+import NotificationBell from '@/components/NotificationBell/index.vue'
+import TabBar from '@/layouts/components/TabBar.vue'
+import TabPageView from '@/layouts/TabPageView.vue'
 import { renew } from '@/api/user'
 import { message } from 'ant-design-vue'
 
@@ -157,12 +180,63 @@ const iconMap = {
   bulb: BulbOutlined, 'file-text': FileTextOutlined,
   'file-protect': FileProtectOutlined, book: BookOutlined,
   'dollar-circle': DollarOutlined,
+  project: ProjectOutlined,
+  robot: RobotOutlined, 'bar-chart': BarChartOutlined, 'pie-chart': PieChartOutlined,
 }
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const permissionStore = usePermissionStore()
+const aiStore = useAiStore()
+aiStore.init()
+
+const tabsStore = useTabsStore()
+
+// 路由变化 → 打开/激活页签。放在 BasicLayout 是因为所有进后台的页面都从这里过。
+// 页签只是"记录"，真正决定缓存的是 TabPageView 里 keep-alive 的 include 名单。
+watch(() => route.fullPath, () => tabsStore.openTab(route), { immediate: true })
+
+// 路由切换 → 自动推导 AI 上下文 + 加载历史消息
+watch(() => [route.path, route.query], () => {
+  const newCtx = buildAiContext(route)
+  // 只有上下文真正变了才清消息（比如从客户A切到客户B），同页面刷新不清
+  const oldPage = aiStore.currentContext?.page
+  const oldId   = aiStore.currentContext?.customer_id
+  if (oldPage !== newCtx.page || oldId !== newCtx.customer_id) {
+    aiStore.messages = []
+  }
+  aiStore.setContext(newCtx)
+  if (aiStore.panelOpen) {
+    aiStore.loadHistory()
+  }
+}, { immediate: true })
+
+function buildAiContext(r) {
+  const ctx = { page: r.name || '', path: r.path }
+  const q = r.query || {}
+
+  // 客户
+  if (r.name === 'customer-detail') {
+    ctx.customer_id = q.id ? parseInt(q.id) : null
+  }
+  if (r.name === 'customer-list') {
+    ctx.keyword = q.keyword || ''
+    ctx.tab = q.tab || ''
+  }
+
+  // 线索
+  if (r.name === 'lead-detail') {
+    ctx.lead_id = q.id ? parseInt(q.id) : null
+  }
+
+  // 报价/订单/合同/联系人 — 详情页都有 ?id=
+  if (['quotation-detail','order-detail','contract-detail','contact-detail'].includes(r.name)) {
+    ctx.entity_id = q.id ? parseInt(q.id) : null
+  }
+
+  return ctx
+}
 
 const collapsed = ref(false)
 const showSubPanel = computed(() => !collapsed.value && selectedMenu.value && selectedMenu.value.children?.some((c) => !c.meta?.hidden))
@@ -171,7 +245,6 @@ const sidebarWidth = computed(() => {
   return showSubPanel.value ? 226 : 68
 })
 const nickname = computed(() => userStore.userInfo?.nickName || userStore.userInfo?.user_name || '管理员')
-const keepAliveList = computed(() => ['index'])
 
 const menus = computed(() => {
   const r = permissionStore.menus.find((r) => r.path === '/')
@@ -353,8 +426,8 @@ function handleLogout() { userStore.logout(); router.replace('/passport/login') 
 }
 .sub-list { padding: 6px 0; }
 .sub-link {
-  height: 38px; line-height: 38px; padding: 0 12px 0 18px;
-  cursor: pointer; color: #595959; font-size: 13px;
+  height: 40px; line-height: 40px; padding: 0 12px 0 18px;
+  cursor: pointer; color: #595959; font-size: 14px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: all 0.15s; border-right: 2px solid transparent;
   &:hover { color: #d6893b; background: rgba(214,137,59,0.04); }
@@ -362,15 +435,15 @@ function handleLogout() { userStore.logout(); router.replace('/passport/login') 
 }
 .sub-group {
   .sub-group-hd {
-    height: 38px; line-height: 38px; padding: 0 16px 0 16px;
-    cursor: pointer; color: #434343; font-size: 13px; font-weight: 500;
+    height: 40px; line-height: 40px; padding: 0 16px 0 16px;
+    cursor: pointer; color: #434343; font-size: 14px; font-weight: 500;
     display: flex; justify-content: space-between; align-items: center;
     transition: all 0.15s;
     &:hover { color: #d6893b; background: rgba(214,137,59,0.04); }
     .anticon { font-size: 11px; transition: transform 0.2s; }
     &.folded .anticon { transform: rotate(-90deg); }
   }
-  .sub-group-bd .sub-link { padding-left: 30px; font-size: 12px; }
+  .sub-group-bd .sub-link { padding-left: 30px; font-size: 13px; }
 }
 
 // ===== Main =====
@@ -381,6 +454,7 @@ function handleLogout() { userStore.logout(); router.replace('/passport/login') 
   display: flex; justify-content: space-between; align-items: center;
   box-shadow: 0 1px 4px rgba(0,0,0,.06);
   .hd-left { display: flex; align-items: center; gap: 12px; }
+  .hd-right { display: flex; align-items: center; gap: 12px; }
   .collapse-btn { font-size: 16px; color: #666; padding: 0; width: 36px; height: 36px;
     &:hover { color: #d6893b; background: rgba(214,137,59,.06); }
   }
@@ -393,10 +467,69 @@ function handleLogout() { userStore.logout(); router.replace('/passport/login') 
   margin: 12px; padding: 20px;
   background: #fff; border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  // 给 page-fade 离场中的页面当作定位参照（见 global.less）
+  position: relative;
+}
+
+// ===== AI 面板（嵌入布局流，非 fixed 浮层） =====
+.main-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.ai-panel {
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid #f0f0f0;
+  background: #fff;
+  overflow: hidden;
+  position: relative;
+}
+.ai-panel-handle {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 56px;
+  background: #f0f0f0;
+  border: 1px solid #e0e0e0;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #999;
+  font-size: 11px;
+  z-index: 10;
+  &:hover { color: #1890ff; background: #e6f7ff; }
+}
+
+// 面板收起时的侧边标签
+.ai-panel-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  padding: 12px 4px;
+  background: #1890ff;
+  color: #fff;
+  border-radius: 6px 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  z-index: 100;
+  box-shadow: -2px 0 8px rgba(24,144,255,.25);
+  transition: all .2s;
+  &:hover { width: 32px; background: #40a9ff; }
 }
 
 // ===== Page transitions =====
-.page-fade-enter-active, .page-fade-leave-active { transition: all 0.2s ease; }
-.page-fade-enter-from { opacity: 0; transform: translateY(6px); }
-.page-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+// 已移到 global.less —— Transition 现在挂在 TabPageView 渲染出的页面根节点上，
+// scoped 属性对不上，写在这里不生效。
 </style>

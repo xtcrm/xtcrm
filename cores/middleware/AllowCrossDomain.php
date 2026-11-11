@@ -52,11 +52,59 @@ class AllowCrossDomain
             'If-Match', 'If-Modified-Since', 'If-None-Match', 'If-Unmodified-Since'
         ], $this->getCustomHeader());
 
-        // 允许的域名白名单（通过环境变量 CORS_ALLOW_ORIGINS 配置，逗号分隔）
-        $allowOrigins = array_filter(explode(',', env('cors.allow_origins', 'http://localhost:8080')));
+        // 允许的域名白名单
+        $allowOrigins = [
+            'https://my.xtocn.com',
+            'http://crm.dingxintax.com',
+            'https://crm.dingxintax.com',
+            'http://localhost:8080',
+            'https://store.xtocn.com',
+            'http://192.168.10.17:9998',
+            'http://172.18.0.1:9998',
+            'http://192.168.10.17:8210',
+            'http://crm.xtocn.com',
+            'https://crm.xtocn.com',
+            'https://m.xtocn.com',
+            'http://yg.xtocn.com',
+            'http://super.xtocn.com',
+            'http://192.168.10.17:9999',
+            'http://192.168.10.17:10000',
+            'http://localhost:9527',
+            'http://localhost:5173',
+            'http://localhost:9999',
+            'http://192.168.10.17:5173',
+            'http://192.168.1.5:9999',
+            'http://192.168.1.5:4321',
+            'http://localhost:4321',
+            'http://127.0.0.1:4321',
+            'http://yj.xtocn.com',
+            'http://192.168.1.5:4322',
+            'http://192.168.1.5:8866',
+            'http://localhost:8866',
+            'http://127.0.0.1:8866',
+            'http://192.168.1.3:9999',
+            'http://192.168.1.3:4321',
+            'http://weshop.dev.xtocn.com',
+            'http://127.0.0.1:4399',
+            'http://192.168.1.3:9998',
+            'http://192.168.1.3:8210',
+            'http://localhost:8080' 
+        ];
         
         $origin = request()->header('origin', '');
-        $allowOrigin = in_array($origin, $allowOrigins) ? $origin : $allowOrigins[0];
+        $allowOrigin = $allowOrigins[0]; // 默认：不在白名单时回退到第一个
+        if (in_array($origin, $allowOrigins)) {
+            $allowOrigin = $origin;
+        } else {
+            // 官网多租户：通配子域名 *.web.xtocn.com / *.yj.xtocn.com
+            $patterns = [
+                '#^https?://[a-z0-9][a-z0-9-]*\.web\.xtocn\.com(:\d+)?$#i',
+                '#^https?://[a-z0-9][a-z0-9-]*\.yj\.xtocn\.com(:\d+)?$#i',
+            ];
+            foreach ($patterns as $p) {
+                if (preg_match($p, $origin)) { $allowOrigin = $origin; break; }
+            }
+        }
 
         return [
             // 只允许白名单域名访问

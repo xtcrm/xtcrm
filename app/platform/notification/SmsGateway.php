@@ -68,7 +68,7 @@ class SmsGateway
                 CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 10,
-                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
             ]);
 
             $resp = curl_exec($ch);

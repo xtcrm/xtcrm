@@ -8,6 +8,9 @@ use think\facade\Log;
 /**
  * 定时任务：公海自动掉入
  * 每天扫描超过N天未跟进的客户，自动掉入公海
+ *
+ * 默认关闭（pool_enabled = 0）：新租户不需要公海规则也能用 CRM，
+ * 只有到「设置 → 公海规则」显式打开后才会真的动客户归属。
  */
 class CrmPool extends Task
 {
@@ -20,12 +23,12 @@ class CrmPool extends Task
     {
         ['storeId' => $this->storeId] = $param;
         $this->setInterval($this->storeId, $this->taskKey, $this->taskExpire, function () {
-            Log::info("CrmPool[{$this->storeId}] started");
+            //Log::info("CrmPool[{$this->storeId}] started");
             try {
                 $count = $this->run();
-                Log::info("CrmPool[{$this->storeId}] moved to pool: {$count}");
+                //Log::info("CrmPool[{$this->storeId}] moved to pool: {$count}");
             } catch (\Throwable $e) {
-                Log::error("CrmPool[{$this->storeId}] ERROR: " . $e->getMessage());
+                //Log::error("CrmPool[{$this->storeId}] ERROR: " . $e->getMessage());
             }
         });
     }
@@ -36,6 +39,14 @@ class CrmPool extends Task
     public function run(): int
     {
         $storeId = $this->storeId;
+
+        // 公海规则默认关闭：没显式开启就直接跳过（连查询都省了）
+        $enabled = Db::name('config')
+            ->where('store_id', $storeId)
+            ->where('config_type', 'crm_setting')
+            ->where('config_name', 'pool_enabled')
+            ->value('config_value');
+        if (intval($enabled) !== 1) return 0;
 
         // 读取配置的公海掉入天数，默认180天
         $poolDays = 180;

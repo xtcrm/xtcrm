@@ -81,6 +81,11 @@
               <a-textarea v-model:value="formState.requirement" :rows="3" />
             </a-form-item>
           </a-col>
+          <a-col :span="24">
+            <a-form-item label="备注" name="remark" :label-col="{ span: 3 }" :wrapper-col="{ span: 20 }">
+              <a-textarea v-model:value="formState.remark" :rows="2" />
+            </a-form-item>
+          </a-col>
         </a-row>
       </a-form>
     </a-spin>
@@ -107,7 +112,7 @@ const formState = reactive({
   lead_name: '', contact_person: '', contact_phone: '', contact_position: '',
   company_name: '', source: undefined, industry: '',
   priority: 2, status: 1, expected_amount: undefined,
-  next_follow_date: null, owner_user_id: undefined, requirement: '',
+  next_follow_date: null, owner_user_id: undefined, requirement: '', remark: '',
 })
 
 function loadUsers() {
@@ -151,6 +156,7 @@ watch(() => props.open, (v) => {
         next_follow_date: vals.next_follow_date || null,
         owner_user_id: vals.owner_user_id,
         requirement: vals.requirement || '',
+        remark: vals.remark || '',
       })
     })
   } else if (v) {
@@ -163,8 +169,7 @@ watch(() => props.open, (v) => {
 })
 
 function filterOption(input, option) {
-  const label = option.children?.default?.() || option.label || ''
-  return String(label).toLowerCase().indexOf(input.toLowerCase()) >= 0
+  return String(option.label || '').toLowerCase().includes(input.toLowerCase())
 }
 
 function handleSubmit() {

@@ -6,8 +6,8 @@
         <a-row :gutter="16">
           <a-col :span="8">
             <a-form-item label="客户" name="customer_id" :rules="[{ required: true, message: '请选择客户' }]">
-              <a-select v-model:value="formState.customer_id" placeholder="搜索客户" show-search :filter-option="filterOption" allow-clear @change="onCustomerChange">
-                <a-select-option v-for="c in customers" :key="c.id" :value="c.id">{{ c.customer_name }}{{ c.customer_code ? ' — ' + c.customer_code : '' }}</a-select-option>
+              <a-select v-model:value="formState.customer_id" placeholder="搜索客户" show-search :filter-option="false" allow-clear @search="onCustomerSearch" @change="onCustomerChange">
+                <a-select-option v-for="c in filteredCustomers" :key="c.id" :value="c.id">{{ c.customer_name }}{{ c.customer_code ? ' — ' + c.customer_code : '' }}</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -37,8 +37,8 @@
           </a-table-column>
           <a-table-column title="产品" key="product_id" width="180">
             <template #default="{ record }">
-              <a-select v-model:value="record.product_id" placeholder="选择产品" show-search allow-clear size="small" style="width:100%" :filter-option="filterOption" @change="(v) => onProductSelect(v, record)">
-                <a-select-option v-for="p in products" :key="p.id" :value="p.id">{{ p.product_name }}{{ p.specification ? '/' + p.specification : '' }}</a-select-option>
+              <a-select v-model:value="record.product_id" placeholder="选择产品" show-search allow-clear size="small" style="width:100%" :filter-option="false" @search="onProductSearch" @change="(v) => onProductSelect(v, record)">
+                <a-select-option v-for="p in filteredProducts" :key="p.id" :value="p.id">{{ p.product_name }}{{ p.specification ? '/' + p.specification : '' }}</a-select-option>
               </a-select>
             </template>
           </a-table-column>
@@ -83,7 +83,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
@@ -94,7 +94,7 @@ import { getAll as getConfigs } from '@/api/crm/config'
 
 let itemKey = 0
 
-const props = defineProps({ open: Boolean, mdl: Object })
+const props = defineProps({ open: Boolean, mdl: Object, preset: Object })
 const emit = defineEmits(['update:open', 'ok'])
 
 const formRef = ref()
@@ -106,7 +106,7 @@ const discountAmount = ref(0)
 const dictOptions = reactive({ currencies: [] })
 
 const formState = reactive({
-  customer_id: undefined, quotation_date: null, currency: 'CNY', valid_days: 30, remark: '',
+  customer_id: undefined, project_id: 0, quotation_date: null, currency: 'CNY', valid_days: 30, remark: '',
 })
 
 function loadCustomers() { getCustomerSelect().then(res => { customers.value = res?.data?.list || [] }) }
@@ -115,10 +115,20 @@ function loadConfigs() { getConfigs().then(res => { const d = res?.data || {}; d
 
 loadCustomers(); loadProducts(); loadConfigs()
 
-function filterOption(input, option) {
-  const label = option.children?.default?.() || option.label || ''
-  return String(label).toLowerCase().indexOf(input.toLowerCase()) >= 0
-}
+const customerSearch = ref('')
+const productSearch = ref('')
+const filteredCustomers = computed(() => {
+  if (!customerSearch.value) return customers.value
+  const kw = customerSearch.value.toLowerCase()
+  return customers.value.filter(c => c.customer_name.toLowerCase().includes(kw) || (c.customer_code || '').toLowerCase().includes(kw))
+})
+const filteredProducts = computed(() => {
+  if (!productSearch.value) return products.value
+  const kw = productSearch.value.toLowerCase()
+  return products.value.filter(p => p.product_name.toLowerCase().includes(kw) || (p.specification || '').toLowerCase().includes(kw))
+})
+function onCustomerSearch(v) { customerSearch.value = v }
+function onProductSearch(v) { productSearch.value = v }
 
 function onCustomerChange() {}
 function onProductSelect(productId, record) {
@@ -131,7 +141,7 @@ function onProductSelect(productId, record) {
   }
 }
 
-function newItem() { return { key: ++itemKey, product_id: null, product_name: '', specification: '', unit: '', quantity: 0, unit_price: 0 } }
+function newItem() { return { key: ++itemKey, product_id: null, intent_id: 0, catalog_id: 0, product_name: '', specification: '', unit: '', quantity: 0, unit_price: 0 } }
 function addItem() { items.value.push(newItem()) }
 function removeItem(i) { items.value.splice(i, 1) }
 function calcItemAmount(item) { return Math.round((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0) * 100) / 100 }
@@ -141,14 +151,34 @@ watch(() => props.open, (v) => {
   if (v && props.mdl?.id) {
     nextTick(() => {
       formRef.value?.resetFields()
-      const vals = { customer_id: props.mdl.customer_id, valid_days: props.mdl.valid_days, remark: props.mdl.remark, currency: props.mdl.currency || 'CNY' }
+      const vals = { customer_id: props.mdl.customer_id, project_id: props.mdl.project_id || 0, valid_days: props.mdl.valid_days, remark: props.mdl.remark, currency: props.mdl.currency || 'CNY' }
       if (props.mdl.quotation_date) vals.quotation_date = dayjs(props.mdl.quotation_date * 1000)
       Object.assign(formState, vals)
       items.value = (props.mdl.items || []).map(item => ({ ...item, key: ++itemKey, quantity: parseFloat(item.quantity) || 0, unit_price: parseFloat(item.unit_price) || 0 }))
       discountAmount.value = parseFloat(props.mdl.discount_amount) || 0
     })
   } else if (v) {
-    nextTick(() => { formRef.value?.resetFields(); items.value = [newItem()]; discountAmount.value = 0; formState.currency = 'CNY'; formState.valid_days = 30 })
+    nextTick(() => {
+      formRef.value?.resetFields()
+      formState.customer_id = props.preset?.customer_id
+      formState.project_id = props.preset?.project_id || 0
+      formState.currency = 'CNY'
+      formState.valid_days = 30
+      discountAmount.value = 0
+      items.value = props.preset?.items?.length
+        ? props.preset.items.map(item => ({
+            key: ++itemKey,
+            product_id: null,
+            intent_id: item.intent_id || 0,
+            catalog_id: item.catalog_id || 0,
+            product_name: item.product_name || '',
+            specification: item.specification || '',
+            unit: item.unit || '',
+            quantity: parseFloat(item.quantity) || 1,
+            unit_price: parseFloat(item.unit_price) || 0,
+          }))
+        : [newItem()]
+    })
   }
 })
 
@@ -159,7 +189,18 @@ function handleSubmit() {
     loading.value = true
     if (values.quotation_date) values.quotation_date = dayjs(values.quotation_date).format('YYYY-MM-DD')
     values.discount_amount = discountAmount.value
-    values.items = items.value.map((item, i) => ({ product_id: item.product_id, product_name: item.product_name, specification: item.specification, unit: item.unit, quantity: parseFloat(item.quantity) || 0, unit_price: parseFloat(item.unit_price) || 0, sort_order: i }))
+    values.project_id = formState.project_id || props.preset?.project_id || 0
+    values.items = items.value.map((item, i) => ({
+      product_id: item.product_id,
+      intent_id: item.intent_id || 0,
+      catalog_id: item.catalog_id || 0,
+      product_name: item.product_name,
+      specification: item.specification,
+      unit: item.unit,
+      quantity: parseFloat(item.quantity) || 0,
+      unit_price: parseFloat(item.unit_price) || 0,
+      sort_order: i,
+    }))
     const fn = props.mdl?.id ? edit : add
     if (props.mdl?.id) values.id = props.mdl.id
     fn(values).then(() => { message.success('保存成功'); loading.value = false; emit('update:open', false); emit('ok') }).catch((err) => { loading.value = false; message.error(err?.data?.message || err?.message || '保存失败，请重试') })

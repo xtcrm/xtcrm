@@ -2,6 +2,8 @@ import request from '@/utils/request'
 
 // 手机号查重
 export function lookupByMobile(mobile) { return request({ url: '/crm.contact/lookup', method: 'get', params: { mobile } }) }
+// 身份证号解析（生日/性别/籍贯）
+export function parseIdCard(idCard) { return request({ url: '/crm.contact/parseIdCard', method: 'get', params: { id_card: idCard } }) }
 // 联系人菜单 → 全局列表
 export function getList(params) { return request({ url: '/crm.contact/lists', method: 'get', params }) }
 // 联系人菜单 → 详情

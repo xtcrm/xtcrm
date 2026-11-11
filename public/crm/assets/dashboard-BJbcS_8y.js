@@ -1,0 +1,1 @@
+import{s as e}from"./index-CJYIsu2i.js";function t(){return e({url:`/crm.dashboard/index`,method:`get`})}export{t};

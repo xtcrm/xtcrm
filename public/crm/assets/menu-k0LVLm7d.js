@@ -1,1 +1,0 @@
-import{t as e}from"./request-C0dyoG6L.js";function t(t){return e({url:`/crm.admin.menu/list`,method:`get`,params:t})}export{t};

@@ -33,6 +33,7 @@ class TokenService
         Cache::set($token, [
             'uid' => (int)$user['store_user_id'],
             'sid' => (int)$user['store_id'],
+            'user_name' => $user['user_name'] ?? '',
             'exp' => time() + self::EXPIRE_SECONDS,
         ], self::EXPIRE_SECONDS);
 
@@ -47,6 +48,17 @@ class TokenService
     public static function verify(): ?array
     {
         $token = self::tokenFromRequest();
+        return self::verifyToken($token ?? '');
+    }
+
+    /**
+     * 校验指定 token 字符串的有效性（供会话校验端点等非 header 场景使用）
+     *
+     * @param string $token  token 字符串
+     * @return array|null  成功返回 ['uid' => int, 'sid' => int, 'exp' => int]，失败返回 null
+     */
+    public static function verifyToken(string $token): ?array
+    {
         if (empty($token)) return null;
 
         $data = Cache::get($token);
@@ -134,10 +146,8 @@ class TokenService
         $uid = self::userId();
         if (empty($uid)) return null;
 
-        $storeId = self::storeId();
         $user = \think\facade\Db::name('store_user')
             ->where('store_user_id', $uid)
-            ->where('store_id', $storeId)
             ->find();
 
         return $user ?: null;
@@ -165,10 +175,10 @@ class TokenService
      */
     private static function makeToken(int $userId): string
     {
+        $guid   = get_guid_v4();
         $stamp  = microtime(true);
-        $random = bin2hex(random_bytes(16));
         $salt   = self::TOKEN_SALT;
-        return hash_hmac('sha256', "{$stamp}_{$userId}_{$random}", $salt);
+        return md5("{$stamp}_{$userId}_{$guid}_{$salt}");
     }
 
     /**
@@ -177,6 +187,9 @@ class TokenService
     private static function tokenFromRequest(): ?string
     {
         $token = request()->header('Access-Token');
+        if (empty($token) && is_debug()) {
+            $token = request()->param('Access-Token');
+        }
         return $token ?: null;
     }
 }

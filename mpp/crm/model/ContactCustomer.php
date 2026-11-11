@@ -31,7 +31,7 @@ class ContactCustomer extends BaseModel
             ->alias('cc')
             ->join('yoshop_crm_contact ct', 'ct.id = cc.contact_id AND ct.is_delete = 0')
             ->where('cc.customer_id', $customerId)
-            ->field('cc.id as link_id, cc.position, cc.department, cc.is_primary, ct.id, ct.contact_name, ct.mobile, ct.gender, ct.birthday, ct.hometown, ct.email, ct.wechat, ct.telephone, ct.id_card, ct.address')
+            ->field('cc.id as link_id, cc.position, cc.department, cc.is_primary, ct.id, ct.contact_name, ct.mobile, ct.gender, ct.birthday, ct.is_lunar, ct.hometown, ct.email, ct.wechat, ct.telephone, ct.id_card, ct.address, ct.remark')
             ->order('cc.is_primary', 'desc')
             ->select()->toArray();
     }

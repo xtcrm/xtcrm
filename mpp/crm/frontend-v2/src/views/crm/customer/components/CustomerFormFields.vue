@@ -47,35 +47,92 @@
       <a-col :span="12"><a-form-item label="负责人" name="owner_user_id"><a-select v-model:value="formState.owner_user_id" placeholder="选择负责人" show-search :filter-option="filterOption" @change="onOwnerChange"><a-select-option v-for="u in storeUsers" :key="u.store_user_id" :value="u.store_user_id">{{ u.real_name || u.user_name }}</a-select-option></a-select></a-form-item></a-col>
       <a-col :span="12"><a-form-item label="负责人部门" name="owner_department_id"><a-tree-select v-model:value="formState.owner_department_id" placeholder="选负责人后自动填入，也可手动选" allow-clear tree-default-expand-all :tree-data="deptTree" :dropdown-style="{ maxHeight: '300px', overflow: 'auto' }" /></a-form-item></a-col>
     </a-row>
+    <a-row :gutter="16">
+      <a-col :span="12"><a-form-item label="客服责任人" name="cs_user_id"><a-select v-model:value="formState.cs_user_id" placeholder="服务 / 续费责任人，可稍后在待分配里指定" allow-clear show-search :filter-option="filterOption"><a-select-option v-for="u in storeUsers" :key="u.store_user_id" :value="u.store_user_id">{{ u.real_name || u.user_name }}</a-select-option></a-select></a-form-item></a-col>
+    </a-row>
 
     <a-divider orientation="left">备注</a-divider>
     <a-row :gutter="16">
       <a-col :span="24"><a-form-item label="备注" name="remark" :label-col="{ span: 2 }" :wrapper-col="{ span: 21 }"><a-textarea v-model:value="formState.remark" placeholder="备注信息" :rows="2" /></a-form-item></a-col>
     </a-row>
+
+    <!-- 自定义字段（动态渲染） -->
+    <template v-if="customFields.length > 0">
+      <a-divider orientation="left">扩展信息</a-divider>
+      <a-row :gutter="16">
+        <a-col :span="12" v-for="field in customFields" :key="field.field_key">
+          <a-form-item :label="field.field_label" :required="field.is_required === 1">
+            <a-input
+              v-if="field.field_type === 'text'"
+              :value="(extra || {})[field.field_key] || ''"
+              @update:value="v => setExtra(field.field_key, v)"
+              :placeholder="field.placeholder || ''" />
+            <a-input-number
+              v-else-if="field.field_type === 'number'"
+              :value="(extra || {})[field.field_key]"
+              @update:value="v => setExtra(field.field_key, v)"
+              style="width:100%" />
+            <a-date-picker
+              v-else-if="field.field_type === 'date'"
+              :value="(extra || {})[field.field_key] ? dayjs((extra || {})[field.field_key]) : null"
+              @update:value="v => setExtra(field.field_key, v ? v.format('YYYY-MM-DD') : '')"
+              style="width:100%" />
+            <a-select
+              v-else-if="field.field_type === 'select'"
+              :value="(extra || {})[field.field_key]"
+              @update:value="v => setExtra(field.field_key, v)"
+              :placeholder="field.placeholder || ''" allow-clear>
+              <a-select-option v-for="opt in (field.options || [])" :key="opt" :value="opt">{{ opt }}</a-select-option>
+            </a-select>
+            <a-switch
+              v-else-if="field.field_type === 'switch'"
+              :checked="(extra || {})[field.field_key] === '1' || (extra || {})[field.field_key] === 1"
+              @update:checked="v => setExtra(field.field_key, v ? '1' : '')" />
+            <a-input v-else :value="(extra || {})[field.field_key] || ''" @update:value="v => setExtra(field.field_key, v)" />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </template>
   </a-form>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import dayjs from 'dayjs'
 import SelectRegion from '@/components/SelectRegion/index.vue'
+import { getActive } from '@/api/crm/customField'
 
-defineProps({
+const props = defineProps({
   formState: Object,
   rules: Array,
   dicts: Object,
   storeUsers: Array,
   deptTree: Array,
+  extra: { type: Object, default: () => ({}) },
 })
-const emit = defineEmits(['setDictName', 'onOwnerChange'])
+const emit = defineEmits(['setDictName', 'onOwnerChange', 'update:extra'])
 
 const formRef = ref()
 const selectRegionRef = ref()
+const customFields = ref([])
+
+function setExtra(key, value) {
+  emit('update:extra', { ...(props.extra || {}), [key]: value === undefined || value === null ? '' : value })
+}
+
+onMounted(() => {
+  getActive('customer').then(res => {
+    customFields.value = (res?.data?.fields || []).map(f => ({
+      ...f,
+      options: (() => { try { const o = f.options; if (typeof o === 'string' && o) return JSON.parse(o); if (Array.isArray(o)) return o; return [] } catch { return [] } })()
+    }))
+  })
+})
 
 function setDictName(dictType, idVal, nameField) { emit('setDictName', dictType, idVal, nameField) }
 function onOwnerChange(userId) { emit('onOwnerChange', userId) }
 function filterOption(input, option) {
-  const label = option.children?.default?.() || option.label || ''
-  return String(label).toLowerCase().indexOf(input.toLowerCase()) >= 0
+  return String(option.label || '').toLowerCase().includes(input.toLowerCase())
 }
 defineExpose({
   validate: () => formRef.value?.validate(),

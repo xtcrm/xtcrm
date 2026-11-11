@@ -2,6 +2,7 @@
 namespace mpp\crm\service;
 
 use app\platform\BaseService;
+use mpp\crm\service\OperationLogService;
 use mpp\crm\model\Product as ProductModel;
 
 class ProductService extends BaseService
@@ -32,6 +33,7 @@ class ProductService extends BaseService
     {
         $model = new ProductModel();
         if ($model->add($data)) {
+            OperationLogService::logAdd('产品', $model->id, $data['product_name'] ?? '');
             return ['success' => true, 'data' => ['id' => $model->id], 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '添加失败'];
@@ -43,6 +45,7 @@ class ProductService extends BaseService
         $detail = $model->detail($id);
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '产品不存在'];
         if ($detail->edit($data)) {
+            OperationLogService::logEdit('产品', $id, $data['product_name'] ?? ($detail['product_name'] ?? ''), $data);
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $detail->getError() ?: '更新失败'];
@@ -55,6 +58,7 @@ class ProductService extends BaseService
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '产品不存在'];
         $detail->is_delete = 1;
         if ($detail->save()) {
+            OperationLogService::logDelete('产品', $id, $detail['product_name'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => '删除失败'];

@@ -1,35 +1,21 @@
 <template>
-  <a-card :bordered="false">
-    <div class="table-operator">
-      <a-button type="primary" @click="handleAdd"><plus-outlined /> 新增合同</a-button>
-    </div>
-
-    <div class="table-page-search-wrapper">
-      <a-form layout="inline">
-        <a-row :gutter="24">
-          <a-col :md="8">
-            <a-form-item label="合同号">
-              <a-input v-model:value="queryParam.contract_no" allow-clear />
-            </a-form-item>
-          </a-col>
-          <a-col :md="8">
-            <a-form-item label="状态">
-              <a-select v-model:value="queryParam.status" allow-clear placeholder="全部">
-                <a-select-option value="">全部</a-select-option>
-                <a-select-option :value="1">草稿</a-select-option>
-                <a-select-option :value="2">已签订</a-select-option>
-                <a-select-option :value="3">履行中</a-select-option>
-                <a-select-option :value="4">已完成</a-select-option>
-                <a-select-option :value="5">已终止</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :md="8">
-            <a-button type="primary" @click="loadData(true)">查询</a-button>
-            <a-button style="margin-left:8px" @click="resetSearch">重置</a-button>
-          </a-col>
-        </a-row>
-      </a-form>
+  <a-card :bordered="false" class="contract-page">
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <div class="action-left">
+        <a-input v-model:value="queryParam.customer_name" placeholder="搜索客户名称..." allow-clear style="width:200px" @pressEnter="loadData(true)" />
+        <a-select v-model:value="queryParam.status" placeholder="状态" allow-clear style="width:110px" @change="loadData(true)">
+          <a-select-option value="">全部</a-select-option>
+          <a-select-option :value="1">草稿</a-select-option>
+          <a-select-option :value="2">已签订</a-select-option>
+          <a-select-option :value="3">履行中</a-select-option>
+          <a-select-option :value="4">已完成</a-select-option>
+          <a-select-option :value="5">已终止</a-select-option>
+        </a-select>
+      </div>
+      <div class="action-right">
+        <a-button type="primary" @click="handleAdd"><template #icon><plus-outlined /></template>新增合同</a-button>
+      </div>
     </div>
 
     <a-table :columns="columns" :data-source="dataSource" :loading="loading" :pagination="pagination"
@@ -62,7 +48,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { getList, deleteById } from '@/api/crm/contract'
+import { getList, getDetail, deleteById } from '@/api/crm/contract'
 import ContractForm from './components/ContractForm.vue'
 
 const router = useRouter()
@@ -101,7 +87,7 @@ async function loadData(reset = false) {
 
 function onTableChange(pag) { pagination.current = pag.current; pagination.pageSize = pag.pageSize; loadData() }
 function handleAdd() { selected.value = null; formVisible.value = true }
-function handleEdit(r) { selected.value = r; formVisible.value = true }
+function handleEdit(r) { getDetail(r.id).then(res => { selected.value = res?.data?.detail || res?.data; formVisible.value = true }) }
 function handleDetail(r) { router.push({ path: '/crm/contract/detail', query: { id: r.id } }) }
 async function handleDelete(r) { deleteById(r.id).then(() => { message.success('删除成功'); loadData() }) }
 function onFormOk() { formVisible.value = false; loadData() }
@@ -109,3 +95,9 @@ function resetSearch() { Object.keys(queryParam).forEach(k => delete queryParam[
 
 onMounted(() => { loadData() })
 </script>
+<style scoped>
+.action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #fff; border-radius: 6px; border: 1px solid #f0f0f0; }
+.action-left { display: flex; gap: 10px; align-items: center; }
+.action-right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.contract-page :deep(.ant-card-body) { padding: 24px; }
+</style>

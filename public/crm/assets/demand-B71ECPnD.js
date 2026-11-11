@@ -1,0 +1,1 @@
+import{s as e}from"./index-CJYIsu2i.js";function t(){return e({url:`/crm.demand/listAll`,method:`get`})}function n(t){return e({url:`/crm.demand/customerDemands`,method:`get`,params:{customer_id:t}})}function r(t){return e({url:`/crm.demand/dismiss`,method:`post`,data:{id:t}})}export{n,t as r,r as t};

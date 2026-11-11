@@ -74,7 +74,7 @@ class OcrGateway
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => $options['timeout'] ?? self::DEFAULT_TIMEOUT,
                 CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
             ]);
 
             $resp = curl_exec($ch);
@@ -97,7 +97,14 @@ class OcrGateway
                 return AiResponse::fail('OCR 未识别到文字');
             }
 
-            return AiResponse::ok(trim($content));
+            // OCR 返回可能是 GBK，检测并转为 UTF-8
+            $content = trim($content);
+            if (!mb_check_encoding($content, 'UTF-8')) {
+                $from = mb_detect_encoding($content, ['GBK', 'GB2312', 'GB18030', 'UTF-8'], true) ?: 'GBK';
+                $content = mb_convert_encoding($content, 'UTF-8', $from);
+            }
+
+            return AiResponse::ok($content);
 
         } catch (\Throwable $e) {
             return AiResponse::fail('OCR 异常: ' . $e->getMessage());

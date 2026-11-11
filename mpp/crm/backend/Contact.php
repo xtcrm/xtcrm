@@ -7,7 +7,7 @@ use mpp\crm\service\ContactService;
 class Contact extends BaseController
 {
     protected $methodRules = [
-        'lists' => 'GET', 'listsByCustomer' => 'GET', 'detail' => 'GET', 'lookup' => 'GET',
+        'lists' => 'GET', 'listsByCustomer' => 'GET', 'detail' => 'GET', 'lookup' => 'GET', 'parseIdCard' => 'GET',
         'add' => 'POST', 'edit' => 'POST', 'unbind' => 'POST', 'delete' => 'POST',
     ];
 
@@ -19,6 +19,14 @@ class Contact extends BaseController
         if (empty($mobile)) return $this->renderError('手机号不能为空');
         $result = ContactService::lookupByMobile($mobile, $this->storeId);
         return $this->renderSuccess($result ?: []);
+    }
+
+    /** 身份证号解析（生日/性别/籍贯省+市） */
+    public function parseIdCard()
+    {
+        $idCard = trim($this->request->param('id_card', ''));
+        if (empty($idCard)) return $this->renderError('身份证号不能为空');
+        return $this->renderSuccess(ContactService::parseIdCard($idCard));
     }
 
     // ==================== 联系人管理菜单 ====================

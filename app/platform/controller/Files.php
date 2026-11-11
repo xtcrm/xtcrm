@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace app\platform\controller;
 
 use app\platform\backend\BaseController;
-use app\store\model\UploadFile as UploadFileModel;
+use app\platform\model\UploadFile as UploadFileModel;
 
 class Files extends BaseController
 {

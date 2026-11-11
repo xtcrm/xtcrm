@@ -7,7 +7,7 @@
       <a-form-item label="登录用户名" name="user_name">
         <a-input v-model:value="form.user_name" disabled />
       </a-form-item>
-      <a-form-item v-if="!record.is_super" label="所属角色" name="roles">
+      <a-form-item v-if="!form.is_super" label="所属角色" name="roles">
         <a-tree-select
           v-model:value="form.roles"
           :tree-data="roleTree"
@@ -16,6 +16,18 @@
           tree-default-expand-all
           placeholder="请选择角色"
         />
+      </a-form-item>
+      <a-form-item label="所属部门" name="department_id" extra="用于数据归属与经理可见范围">
+        <a-tree-select
+          v-model:value="form.department_id"
+          :tree-data="deptTree"
+          allow-clear
+          tree-default-expand-all
+          placeholder="请选择所属部门"
+        />
+      </a-form-item>
+      <a-form-item label="超级管理员" name="is_super" extra="超管拥有全部权限，无需分配角色">
+        <a-switch v-model:checked="form.is_super" />
       </a-form-item>
       <a-form-item label="登录密码" name="password">
         <a-input-password v-model:value="form.password" placeholder="留空则不修改" />
@@ -34,6 +46,7 @@
 import { ref, reactive, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import * as UserApi from '@/api/user'
+import { getTreeList as getDepts } from '@/api/department'
 
 const props = defineProps({ roleList: { type: Array, default: () => [] } })
 const emit = defineEmits(['ok'])
@@ -43,11 +56,12 @@ const loading = ref(false)
 const title = ref('编辑管理员')
 const formRef = ref()
 const record = reactive({})
-const form = reactive({ real_name: '', user_name: '', roles: [], password: '', password_confirm: '', sort: 100 })
+const form = reactive({ real_name: '', user_name: '', roles: [], password: '', password_confirm: '', sort: 100, is_super: false, department_id: undefined })
+const deptTree = ref([])
 
 const rules = computed(() => ({
   real_name: [{ required: true, min: 2, message: '请输入至少2个字符' }],
-  roles: record.is_super ? [] : [{ required: true, type: 'array', min: 1, message: '请至少选择一个角色' }],
+  roles: form.is_super ? [] : [{ required: true, type: 'array', min: 1, message: '请至少选择一个角色' }],
   password: [{ min: 6, message: '请输入至少6个字符' }],
   password_confirm: [{ validator: validatePwdConfirm }],
   sort: [{ required: true, type: 'number', message: '请输入排序' }],
@@ -63,6 +77,23 @@ function validatePwdConfirm(_rule, value) {
   return Promise.resolve()
 }
 
+function loadDepts() {
+  getDepts({}).then(res => {
+    // 后端 /manage.department/tree 返回 { tree: [...] }，已是嵌套结构
+    const tree = res?.data?.tree || []
+    deptTree.value = toTreeData(tree)
+  }).catch(() => {})
+}
+function toTreeData(list) {
+  if (!Array.isArray(list)) return []
+  return list.map(d => ({
+    title: d.department_name,
+    value: d.id,
+    key: d.id,
+    children: d.children && d.children.length ? toTreeData(d.children) : undefined,
+  }))
+}
+
 function open(row) {
   Object.assign(record, row)
   form.real_name = row.real_name
@@ -71,14 +102,17 @@ function open(row) {
   form.password = ''
   form.password_confirm = ''
   form.roles = row.roleIds || []
+  form.is_super = !!row.is_super
+  form.department_id = row.department_id || undefined
+  loadDepts()
   visible.value = true
 }
 
 async function onOk() {
   try { await formRef.value.validate() } catch { return }
   loading.value = true
-  const data = { user_name: form.user_name, real_name: form.real_name, sort: form.sort }
-  if (!record.is_super) data.roles = form.roles
+  const data = { user_name: form.user_name, real_name: form.real_name, sort: form.sort, is_super: form.is_super ? 1 : 0, department_id: form.department_id || 0 }
+  if (!form.is_super) data.roles = form.roles
   if (form.password) { data.password = form.password; data.password_confirm = form.password_confirm }
   try {
     const res = await UserApi.edit(record.store_user_id, data)

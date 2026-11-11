@@ -287,8 +287,11 @@ class SkillLoader
         if (preg_match('/_(\d+\.\d+\.\d+)_/', $filename, $m)) {
             return $m[1];
         }
-        // 回退：用整个文件名（去掉扩展名）作为版本
-        return pathinfo($filename, PATHINFO_FILENAME);
+        // 回退：文件名不符合 {序号}_{版本}_{描述} 约定时，用短哈希当版本。
+        // ⚠️ 不要用整个文件名 —— version 列是 varchar(20)，超长会导致
+        //    markMigrationExecuted 写入失败，迁移被判为「没跑过」而每次请求重跑。
+        //    曾因此让一个一次性去重脚本反复执行、把演示数据砍半。
+        return 'adhoc-' . substr(sha1($filename), 0, 12);
     }
 
     /**

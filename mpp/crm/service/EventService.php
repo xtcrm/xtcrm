@@ -14,13 +14,14 @@ class EventService extends BaseService
      * 记录一条业务事件
      * 不开启自己的事务——由调用方的事务包裹，保证原子性
      */
-    public static function record(string $eventType, string $targetType, int $targetId, array $data = [], ?int $actorUserId = null): void
+    public static function record(string $eventType, string $targetType, int $targetId, array $data = [], ?int $actorUserId = null, ?int $projectId = null): void
     {
         $instance = new static();
         $log = new EventLog();
         $log->event_type = $eventType;
         $log->target_type = $targetType;
         $log->target_id = $targetId;
+        $log->project_id = $projectId ?? 0;
         $log->actor_user_id = $actorUserId;
         $log->data = json_encode($data, JSON_UNESCAPED_UNICODE);
         $log->create_time = time();

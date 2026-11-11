@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace app\platform\controller\files;
 
 use app\platform\backend\BaseController;
-use app\store\model\UploadGroup as GroupModel;
+use app\platform\model\UploadGroup as GroupModel;
 
 class Group extends BaseController
 {

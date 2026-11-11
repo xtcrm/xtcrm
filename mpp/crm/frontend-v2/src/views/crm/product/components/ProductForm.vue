@@ -108,8 +108,7 @@ function setDictName(idVal) {
 }
 
 function filterOption(input, option) {
-  const label = option.children?.default?.() || option.label || ''
-  return String(label).toLowerCase().indexOf(input.toLowerCase()) >= 0
+  return String(option.label || '').toLowerCase().includes(input.toLowerCase())
 }
 
 watch(() => props.open, (v) => {

@@ -36,6 +36,10 @@ class Role extends BaseController
         foreach ($list as &$item) {
             $item['menuIds'] = RoleMenu::where('role_id', $item['role_id'])->column('menu_id');
         }
+        unset($item);
+
+        // 按 parent_id 组装成树：角色表/角色选择器/用户表单都依赖 children
+        $list = self::buildTree($list);
 
         return $this->renderSuccess(compact('list'));
     }
@@ -50,9 +54,15 @@ class Role extends BaseController
             return $this->renderError('角色名称不能为空');
         }
 
+        $parentId = (int)($data['parent_id'] ?? 0);
+        if ($parentId > 0 && !$this->existsRole($parentId)) {
+            return $this->renderError('上级角色不存在');
+        }
+
         $model = new RoleModel;
         $model->save([
             'role_name'  => $data['role_name'],
+            'parent_id'  => $parentId,
             'sort'       => (int)($data['sort'] ?? 100),
             'store_id'   => $this->storeId,
             'create_time' => time(),
@@ -80,8 +90,21 @@ class Role extends BaseController
         }
 
         $data = $this->postForm();
+
+        // 上级角色：必须存在，且不能是自己或自己的下级（否则成环，列表整棵树会丢）
+        $parentId = (int)($data['parent_id'] ?? $model['parent_id'] ?? 0);
+        if ($parentId > 0) {
+            if (!$this->existsRole($parentId)) {
+                return $this->renderError('上级角色不存在');
+            }
+            if ($parentId === (int)$roleId || $this->isDescendant($parentId, (int)$roleId)) {
+                return $this->renderError('上级角色不能选自己或自己的下级');
+            }
+        }
+
         $model->save([
             'role_name'  => $data['role_name'] ?? $model['role_name'],
+            'parent_id'  => $parentId,
             'sort'       => (int)($data['sort'] ?? $model['sort']),
         ]);
 
@@ -130,5 +153,75 @@ class Role extends BaseController
         $model->delete();
 
         return $this->renderSuccess('删除成功');
+    }
+
+    /** 角色是否属于当前租户 */
+    private function existsRole(int $roleId): bool
+    {
+        return $roleId > 0 && RoleModel::where('role_id', $roleId)->count() > 0;
+    }
+
+    /** $candidateId 是否是 $roleId 的下级（沿 parent_id 向上找，带环保护） */
+    private function isDescendant(int $candidateId, int $roleId): bool
+    {
+        $seen = [];
+        $cur = $candidateId;
+        while ($cur > 0 && !isset($seen[$cur])) {
+            if ($cur === $roleId) return true;
+            $seen[$cur] = true;
+            $cur = (int)RoleModel::where('role_id', $cur)->value('parent_id');
+        }
+        return false;
+    }
+
+    /**
+     * 平铺角色 -> 树
+     *
+     * - parent_id 指向不存在的角色（脏数据/父角色被删）时按顶级处理，节点不丢
+     * - 环保护：互相指向的角色按顶级兜底，避免整组角色从列表消失
+     */
+    private static function buildTree(array $rows): array
+    {
+        $byId = [];
+        foreach ($rows as $row) {
+            $row['children'] = [];
+            $byId[(int)$row['role_id']] = $row;
+        }
+
+        $childrenOf = [];
+        $roots = [];
+        foreach ($byId as $id => $row) {
+            $pid = (int)$row['parent_id'];
+            if ($pid > 0 && $pid !== $id && isset($byId[$pid])) {
+                $childrenOf[$pid][] = $id;
+            } else {
+                $roots[] = $id;
+            }
+        }
+
+        $built = [];
+        $walk = function ($id, array $path) use (&$walk, &$byId, &$childrenOf, &$built) {
+            $node = $byId[$id];
+            $built[$id] = true;
+            $children = [];
+            foreach ($childrenOf[$id] ?? [] as $cid) {
+                if (isset($path[$cid])) continue; // 环保护
+                $children[] = $walk($cid, $path + [$id => true]);
+            }
+            $node['children'] = $children;
+            return $node;
+        };
+
+        $tree = [];
+        foreach ($roots as $id) {
+            $tree[] = $walk($id, []);
+        }
+        // 兜底：环里的节点没有任何根可达
+        foreach ($byId as $id => $row) {
+            if (!isset($built[$id])) {
+                $tree[] = $walk($id, []);
+            }
+        }
+        return $tree;
     }
 }

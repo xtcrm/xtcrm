@@ -1,39 +1,18 @@
 <?php
 namespace app\common\service;
 
-use think\facade\Db;
+use app\platform\ai\AiConfig;
 
 class AiService
 {
+    /**
+     * 读取全局 AI 配置（设置 → AI 配置）
+     *
+     * 优先 llm_setting，未配置时回退历史 crm_setting；按当前请求租户隔离。
+     */
     private static function getConfig(): array
     {
-        $rows = Db::name('config')
-            ->where('config_type', 'crm_setting')
-            ->select()->toArray();
-        $cfg = [
-            'api_url'     => 'https://api.deepseek.com/chat/completions',
-            'api_key'     => '',
-            'model'       => 'deepseek-chat',
-            'temperature' => 0.7,
-            'max_tokens'  => 1024,
-        ];
-        foreach ($rows as $r) {
-            switch ($r['config_name']) {
-                case 'ai_api_url':
-                    $url = $r['config_value'] ?: $cfg['api_url'];
-                    // 如果只配了基础域名，自动补全路径
-                    if (!str_contains($url, '/chat/completions')) {
-                        $url = rtrim($url, '/') . '/chat/completions';
-                    }
-                    $cfg['api_url'] = $url;
-                    break;
-                case 'ai_api_key':     $cfg['api_key']     = $r['config_value']; break;
-                case 'ai_model':       $cfg['model']       = $r['config_value'] ?: $cfg['model']; break;
-                case 'ai_temperature': $cfg['temperature'] = floatval($r['config_value'] ?? 0.7); break;
-                case 'ai_max_tokens':  $cfg['max_tokens']  = intval($r['config_value'] ?? 1024); break;
-            }
-        }
-        return $cfg;
+        return AiConfig::get();
     }
 
     /** 分析客户，返回 {score, tags, suggestion} */
@@ -67,8 +46,8 @@ class AiService
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 120,
                 CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
             ]);
             $resp = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -126,8 +105,8 @@ class AiService
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 60,
                 CURLOPT_CONNECTTIMEOUT => 3,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
             ]);
             $resp = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -174,8 +153,8 @@ class AiService
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 30,
                 CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
             ]);
             $resp = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -189,6 +168,139 @@ class AiService
             $text = trim($body['choices'][0]['message']['content'] ?? '');
             return $text ? ['success' => true, 'data' => $text, 'error' => '']
                          : ['success' => false, 'data' => null, 'error' => '空响应'];
+        } catch (\Exception $e) {
+            return ['success' => false, 'data' => null, 'error' => $e->getMessage()];
+        }
+    }
+
+    /** 从企查查/天眼查文本中提取企业信息 */
+    public static function extractCompanyInfo(string $text): array
+    {
+        $cfg = self::getConfig();
+        if (empty($cfg['api_key'])) return ['success' => false, 'data' => null, 'error' => '未配置API Key'];
+
+        $prompt = "从以下企业信息文本中提取关键字段。只返回JSON，字段值为空字符串表示未找到。\n"
+            . "字段：customer_name、legal_representative、registered_capital、paid_in_capital、"
+            . "established_date(YYYY-MM-DD)、tax_number(18位)、registration_status、"
+            . "business_registration_no、organization_code、taxpayer_qualification、"
+            . "insured_count(纯数字)、telephone、email、website、registered_address、"
+            . "business_scope、introduction、national_industry、registration_authority、"
+            . "approval_date、business_term\n\n文本：\n" . mb_substr($text, 0, 4000);
+
+        try {
+            $ch = curl_init($cfg['api_url']);
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode([
+                    'model' => $cfg['model'],
+                    'messages' => [
+                        ['role' => 'system', 'content' => '你是企业信息提取助手，只返回JSON，不返回其他内容。'],
+                        ['role' => 'user', 'content' => $prompt],
+                    ],
+                    'temperature' => 0.1,
+                    'max_tokens' => 2048,
+                    'response_format' => ['type' => 'json_object'],
+                ], JSON_UNESCAPED_UNICODE),
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $cfg['api_key']],
+                CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => false,
+            ]);
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err = curl_error($ch);
+            curl_close($ch);
+            if ($err) return ['success' => false, 'data' => null, 'error' => '网络错误: ' . $err];
+            if ($code !== 200) return ['success' => false, 'data' => null, 'error' => "HTTP {$code}"];
+
+            $body = json_decode($resp, true);
+            $content = trim($body['choices'][0]['message']['content'] ?? '');
+            $data = json_decode($content, true);
+            // 容错：处理 markdown 代码块包裹或前缀文字
+            if (!$data) {
+                if (preg_match('/```(?:json)?\s*\n?(.*?)\n?```/s', $content, $m)) {
+                    $data = json_decode(trim($m[1]), true);
+                } elseif (preg_match('/\{.*\}/s', $content, $m)) {
+                    $data = json_decode($m[0], true);
+                }
+            }
+            // 最后的兜底：尝试修复尾部截断的 JSON
+            if (!$data && substr($content, -1) !== '}') {
+                $fixed = $content;
+                // 补全缺失的引号和括号
+                $fixed = preg_replace('/,\s*$/', '', $fixed); // 去掉尾部逗号
+                if (substr_count($fixed, '{') > substr_count($fixed, '}')) {
+                    $fixed .= '"}'; // 简单补全
+                }
+                $data = json_decode($fixed, true);
+            }
+            if (!$data) return ['success' => false, 'data' => null, 'error' => 'AI返回格式异常: ' . mb_substr($content, 0, 200)];
+            return ['success' => true, 'data' => $data, 'error' => ''];
+        } catch (\Exception $e) {
+            return ['success' => false, 'data' => null, 'error' => $e->getMessage()];
+        }
+    }
+
+    /** 生成需求规则：自然语言描述 → 结构化规则 JSON */
+    public static function generateDemandRule(string $description, string $fieldsHint): array
+    {
+        $cfg = self::getConfig();
+        if (empty($cfg['api_key'])) {
+            return ['success' => false, 'data' => null, 'error' => 'AI服务未配置API Key'];
+        }
+
+        $systemPrompt = "你是 CRM 系统的需求规则配置助手。根据用户的自然语言描述，生成需求识别规则。\n\n"
+            . "可用原生字段：\n{$fieldsHint}\n\n"
+            . "⚠️ 重要规则：\n"
+            . "1. 优先使用已有的原生字段，不要为已有字段创建扩展字段。\n"
+            . "   例如：用户说「参保人数」，原生字段已有 insured_count，直接用 insured_count，不要新建 extra.insured_count。\n"
+            . "2. 只有当用户描述的需求涉及的数据在原生字段中确实不存在时，才在 new_fields 中建议创建。\n"
+            . "3. 自定义字段必须用 extra.英文key 引用，不要用中文。例如 extra.supervisor 而不是 extra.监事。\n"
+            . "操作符：not_empty(非空), empty(为空), eq(等于), contains(包含), gt(大于), split_count_gt(分隔后条目数大于N), days_since_gt(距今超过N天)\n"
+            . "逻辑：all=所有条件必须满足, any=任一条件满足即可\n\n"
+            . "输出 JSON：{\"rule_key\":\"英文标识\",\"rule_name\":\"规则中文名\",\"conditions\":[{\"field\":\"字段\",\"op\":\"操作符\",\"value\":\"比较值(可选)\"}],\"logic\":\"all|any\",\"priority\":1-3,\"new_fields\":[{\"field_key\":\"英文key\",\"field_label\":\"中文名\",\"field_type\":\"text|date|select\"}]}\n"
+            . "new_fields 只放真正不存在的字段，已有原生字段或已有扩展字段都不要放进去。";
+
+        try {
+            $ch = curl_init($cfg['api_url']);
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => json_encode([
+                    'model'       => $cfg['model'],
+                    'messages'    => [
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user',   'content' => $description],
+                    ],
+                    'temperature'      => 0.3,
+                    'max_tokens'       => 1024,
+                    'response_format'  => ['type' => 'json_object'],
+                ], JSON_UNESCAPED_UNICODE),
+                CURLOPT_HTTPHEADER     => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $cfg['api_key'],
+                ],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 60,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+            ]);
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err  = curl_error($ch);
+            curl_close($ch);
+
+            if ($err) return ['success' => false, 'data' => null, 'error' => '网络错误: ' . $err];
+            if ($code !== 200) return ['success' => false, 'data' => null, 'error' => "HTTP {$code}"];
+
+            $body = json_decode($resp, true);
+            $text = trim($body['choices'][0]['message']['content'] ?? '');
+            if (empty($text)) return ['success' => false, 'data' => null, 'error' => '空响应'];
+
+            $rule = json_decode($text, true);
+            if (!$rule || empty($rule['conditions'])) {
+                return ['success' => false, 'data' => null, 'error' => 'AI返回格式异常，请重试'];
+            }
+            return ['success' => true, 'data' => $rule, 'error' => ''];
         } catch (\Exception $e) {
             return ['success' => false, 'data' => null, 'error' => $e->getMessage()];
         }
@@ -223,8 +335,8 @@ class AiService
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 30,
                 CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
             ]);
             $resp = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -285,8 +397,8 @@ class AiService
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT        => 120,
                 CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
             ]);
             $resp = curl_exec($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -346,8 +458,8 @@ class AiService
                     CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_TIMEOUT => 60,
                     CURLOPT_CONNECTTIMEOUT => 5,
-                    CURLOPT_SSL_VERIFYPEER => true,
-                    CURLOPT_SSL_VERIFYHOST => 2,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => false,
                 ]);
                 $resp = curl_exec($ch);
                 $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

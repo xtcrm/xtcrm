@@ -66,7 +66,8 @@ class NotificationService extends BaseService
             $typeName = $typeNames[$type] ?? $type;
             $title = count($items) . " 个客户处于{$typeName}状态";
             $content = implode('、', array_column($items, 'title'));
-            $actionUrl = '/crm/dashboard';
+            // 合并通知点击跳转到工作台（工作台已展示洞察卡片）
+            $actionUrl = '/index';
             $sourceId = 0;
         }
 
@@ -83,6 +84,52 @@ class NotificationService extends BaseService
         $model->save();
 
         return 1;
+    }
+
+    /**
+     * 推送一条站内通知（通用入口）
+     *
+     * 与 generateDigest 那条洞察链路互不影响：后者是把多条 insight 合并成一条摘要，
+     * 本方法是「一个业务事件一条通知」，供工单等业务模块直接调用。
+     *
+     * @param int    $userId     收件人 store_user.store_user_id
+     * @param int    $storeId    租户ID，必传。定时/CLI 进程无请求上下文，全局 scope 不生效
+     * @param string $title      标题，超 200 字符截断
+     * @param string $content    正文，超 500 字符截断（crm_notification.content 是 varchar(500)）
+     * @param string $type       通知类型，如 workorder_assigned
+     * @param string $sourceType 来源模块，如 workorder
+     * @param int    $sourceId   来源业务ID
+     * @param string $actionUrl  点击跳转地址，超 200 字符截断
+     * @return int   新通知ID，参数不合法时返回 0
+     */
+    public function push(
+        int $userId,
+        int $storeId,
+        string $title,
+        string $content,
+        string $type = 'system',
+        string $sourceType = 'system',
+        int $sourceId = 0,
+        string $actionUrl = ''
+    ): int {
+        if ($userId <= 0 || $storeId <= 0) {
+            return 0;
+        }
+
+        $model = new NotificationModel();
+        $model->user_id = $userId;
+        $model->store_id = $storeId;
+        $model->type = mb_substr($type, 0, 50);
+        $model->title = mb_substr($title, 0, 200);
+        $model->content = mb_substr($content, 0, 500);
+        $model->source_type = mb_substr($sourceType, 0, 50);
+        $model->source_id = $sourceId;
+        $model->action_url = mb_substr($actionUrl, 0, 200);
+        $model->is_read = 0;
+        $model->create_time = time();
+        $model->save();
+
+        return (int)$model->id;
     }
 
     /** 获取用户未读通知列表 */
@@ -116,18 +163,23 @@ class NotificationService extends BaseService
         return ['success' => true, 'data' => null, 'error' => ''];
     }
 
-    /** 清理旧通知（30天已读 + 90天未读） */
-    public function cleanup(): int
+    /**
+     * 清理旧通知（30天已读 + 90天未读）
+     * @param int $storeId 必须显式传租户：定时进程无请求上下文，全局 scope 不生效，不传会跨租户误删
+     */
+    public function cleanup(int $storeId): int
     {
         $count = 0;
         // 30天已读清理
         $cutoff30 = time() - 30 * 86400;
-        $count += NotificationModel::where('is_read', 1)
+        $count += NotificationModel::where('store_id', $storeId)
+            ->where('is_read', 1)
             ->where('create_time', '<', $cutoff30)->delete();
 
         // 90天未读标记已读
         $cutoff90 = time() - 90 * 86400;
-        $count += NotificationModel::where('is_read', 0)
+        $count += NotificationModel::where('store_id', $storeId)
+            ->where('is_read', 0)
             ->where('create_time', '<', $cutoff90)
             ->update(['is_read' => 1, 'read_time' => time()]);
 

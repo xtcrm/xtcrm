@@ -10,13 +10,42 @@ class Quotation extends BaseModel
     protected $name = 'crm_quotation';
     protected $autoWriteTimestamp = true;
     protected $append = ['customer_name', 'owner_user_name', 'status_text'];
-    
+
+    // ——— Accessor ———
+    public function getCustomerNameAttr($value, $data)
+    {
+        if (!empty($data['customer_id'])) {
+            return \think\facade\Db::name('crm_customer')
+                ->where('id', $data['customer_id'])->value('customer_name') ?: '';
+        }
+        return '';
+    }
+
+    public function getOwnerUserNameAttr($value, $data)
+    {
+        if (!empty($data['owner_user_id'])) {
+            $user = \think\facade\Db::name('store_user')
+                ->where('store_user_id', $data['owner_user_id'])
+                ->field(['real_name', 'user_name'])->find();
+            return $user ? ($user['real_name'] ?: $user['user_name']) : '';
+        }
+        return '';
+    }
+
+    public function getStatusTextAttr($value, $data)
+    {
+        $map = [1 => '草稿', 2 => '已发送', 3 => '已确认', 4 => '已拒绝', 5 => '已转订单'];
+        return $map[$data['status'] ?? 0] ?? '';
+    }
+
     public function getList($where = [], $param = [])
     {
-        $allowedFields = ['id', 'quotation_no', 'customer_id', 'status', 'owner_user_id', 'is_delete'];
+        $allowedFields = ['id', 'quotation_no', 'customer_id', 'project_id', 'status', 'owner_user_id', 'is_delete'];
         $filterWhere = [];
         foreach ($where as $key => $value) {
-            if (in_array($key, $allowedFields)) $filterWhere[$key] = $value;
+            if (in_array($key, $allowedFields) && $value !== '' && $value !== null) {
+                $filterWhere[$key] = $value;
+            }
         }
         if (!empty($where['customer_name'])) {
             $customerIds = Customer::where('customer_name', 'like', '%' . $where['customer_name'] . '%')
@@ -29,8 +58,16 @@ class Quotation extends BaseModel
         if (!empty($where['quotation_date_to'])) {
             $filterWhere[] = ['quotation_date', '<=', strtotime($where['quotation_date_to'] . ' 23:59:59')];
         }
-        return $this->where($filterWhere)->where('is_delete', 0)
-            ->order(['id' => 'desc'])->paginate($param);
+        // 分离字符串 key 和数字 key，防止 ThinkPHP strpos(0,'|') 崩溃
+        $query = $this->where('is_delete', 0);
+        foreach ($filterWhere as $key => $value) {
+            if (is_string($key)) {
+                $query->where($key, $value);
+            } else {
+                $query->where([$value]);
+            }
+        }
+        return $query->order(['id' => 'desc'])->paginate($param);
     }
 
     public function detail($id)
@@ -131,6 +168,8 @@ class Quotation extends BaseModel
                 'store_id' => static::$storeId,
                 'quotation_id' => $quotationId,
                 'product_id' => $item['product_id'] ?? null,
+                'intent_id' => (int)($item['intent_id'] ?? 0),
+                'catalog_id' => (int)($item['catalog_id'] ?? 0),
                 'product_name' => $item['product_name'] ?? '',
                 'specification' => $item['specification'] ?? '',
                 'unit' => $item['unit'] ?? '',

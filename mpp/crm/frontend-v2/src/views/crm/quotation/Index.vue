@@ -1,33 +1,20 @@
 <template>
-  <a-card :bordered="false">
-    <div class="table-operator">
-      <a-button type="primary" @click="handleAdd"><plus-outlined /> 新增报价单</a-button>
-    </div>
-    <div class="table-page-search-wrapper">
-      <a-form layout="inline">
-        <a-row :gutter="24">
-          <a-col :md="6" :sm="24">
-            <a-form-item label="客户名称"><a-input v-model:value="queryParam.customer_name" placeholder="客户名称" allow-clear /></a-form-item>
-          </a-col>
-          <a-col :md="6" :sm="24">
-            <a-form-item label="状态">
-              <a-select v-model:value="queryParam.status" placeholder="全部" allow-clear>
-                <a-select-option value="">全部</a-select-option>
-                <a-select-option :value="1">草稿</a-select-option><a-select-option :value="2">已发送</a-select-option>
-                <a-select-option :value="3">已确认</a-select-option><a-select-option :value="4">已拒绝</a-select-option>
-                <a-select-option :value="5">已转订单</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :md="12" :sm="24">
-            <a-form-item label="报价日期"><a-range-picker v-model:value="queryParam.dateRange" style="width:100%" /></a-form-item>
-          </a-col>
-          <a-col :md="24" :sm="24">
-            <a-button type="primary" @click="loadData(true)">查询</a-button>
-            <a-button style="margin-left:8px" @click="resetSearch">重置</a-button>
-          </a-col>
-        </a-row>
-      </a-form>
+  <a-card :bordered="false" class="quotation-page">
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <div class="action-left">
+        <a-input v-model:value="queryParam.customer_name" placeholder="搜索客户名称..." allow-clear style="width:200px" @pressEnter="loadData(true)" />
+        <a-select v-model:value="queryParam.status" placeholder="状态" allow-clear style="width:110px" @change="loadData(true)">
+          <a-select-option value="">全部</a-select-option>
+          <a-select-option :value="1">草稿</a-select-option><a-select-option :value="2">已发送</a-select-option>
+          <a-select-option :value="3">已确认</a-select-option><a-select-option :value="4">已拒绝</a-select-option>
+          <a-select-option :value="5">已转订单</a-select-option>
+        </a-select>
+        <a-range-picker v-model:value="queryParam.dateRange" style="width:230px" @change="loadData(true)" />
+      </div>
+      <div class="action-right">
+        <a-button type="primary" @click="handleAdd"><template #icon><plus-outlined /></template>新增报价单</a-button>
+      </div>
     </div>
 
     <a-table :columns="columns" :data-source="dataSource" :loading="loading" :pagination="pagination"
@@ -51,25 +38,30 @@
         </template>
       </template>
     </a-table>
-    <QuotationForm v-model:open="formVisible" :mdl="selected" @ok="onFormOk" />
+    <QuotationForm v-model:open="formVisible" :mdl="selected" :preset="preset" @ok="onFormOk" />
   </a-card>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, onActivated } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getList, getDetail, deleteById, changeStatus } from '@/api/crm/quotation'
 import QuotationForm from './components/QuotationForm.vue'
+import { getDetail as getIntentDetail } from '@/api/crm/intent'
+import { getList as getCatalog } from '@/api/crm/catalog'
 
+const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const dataSource = ref([])
 const queryParam = reactive({})
 const formVisible = ref(false)
 const selected = ref(null)
+const preset = ref(null)
+let handledIntentId = 0
 const pagination = reactive({ current: 1, pageSize: 15, total: 0, showSizeChanger: true, showTotal: t => `共 ${t} 条` })
 
 const columns = [
@@ -102,13 +94,50 @@ async function loadData(reset = false) {
 }
 
 function onTableChange(pag) { pagination.current = pag.current; pagination.pageSize = pag.pageSize; loadData() }
-function handleAdd() { selected.value = null; formVisible.value = true }
-function handleEdit(record) { getDetail(record.id).then(res => { if (res?.status === 200) { selected.value = res.data?.detail || res.data; formVisible.value = true } }) }
+function handleAdd() { selected.value = null; preset.value = null; formVisible.value = true }
+function handleEdit(record) { preset.value = null; getDetail(record.id).then(res => { if (res?.status === 200) { selected.value = res.data?.detail || res.data; formVisible.value = true } }) }
 function handleDetail(record) { router.push({ path: '/crm/quotation/detail', query: { id: record.id } }) }
 async function handleDelete(record) { await deleteById(record.id); message.success('删除成功'); loadData() }
 async function handleSend(record) { await changeStatus(record.id, 2); message.success('已发送'); loadData() }
 function onFormOk() { formVisible.value = false; loadData() }
 function resetSearch() { Object.keys(queryParam).forEach(k => delete queryParam[k]); loadData(true) }
 
-onMounted(() => { loadData() })
+onMounted(() => { loadData(); maybeOpenFromIntent() })
+onActivated(() => { maybeOpenFromIntent() })
+
+/** 从需求池「报价」跳进来：带出客户、项目、服务与标准价 */
+async function maybeOpenFromIntent() {
+  const intentId = parseInt(route.query.intent_id)
+  if (!intentId || intentId === handledIntentId) return
+  handledIntentId = intentId
+  try {
+    const [intentRes, catalogRes] = await Promise.all([getIntentDetail(intentId), getCatalog()])
+    const intent = intentRes?.data?.intent
+    if (!intent) return
+    const catalogs = Array.isArray(catalogRes?.data) ? catalogRes.data : (catalogRes?.data?.list || [])
+    const cat = catalogs.find(c => Number(c.id) === Number(intent.catalog_id))
+    preset.value = {
+      customer_id: intent.customer_id,
+      project_id: intent.project_id || 0,
+      items: [{
+        intent_id: intent.id,
+        catalog_id: intent.catalog_id || 0,
+        product_name: intent.service_name || intent.title,
+        unit: intent.unit || '',
+        quantity: Number(intent.quantity) || 1,
+        unit_price: Number(cat?.price) || 0,
+      }],
+    }
+    selected.value = null
+    formVisible.value = true
+  } catch (e) {
+    console.error('[报价] 读取需求失败：', e)
+  }
+}
 </script>
+<style scoped>
+.action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #fff; border-radius: 6px; border: 1px solid #f0f0f0; }
+.action-left { display: flex; gap: 10px; align-items: center; }
+.action-right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.quotation-page :deep(.ant-card-body) { padding: 24px; }
+</style>

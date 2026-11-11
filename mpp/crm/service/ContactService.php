@@ -2,6 +2,8 @@
 namespace mpp\crm\service;
 
 use app\platform\BaseService;
+use app\platform\model\Region;
+use mpp\crm\service\OperationLogService;
 use mpp\crm\model\Contact as ContactModel;
 use mpp\crm\model\ContactCustomer;
 
@@ -41,7 +43,14 @@ class ContactService extends BaseService
             $result['gender'] = ($genderCode % 2 === 1) ? 1 : 2;
         }
 
-        if ($len >= 2) {
+        if ($len >= 6) {
+            // 前6位 = 行政区划代码，用 region 表解析到省+市（直辖市去重）
+            $names = Region::getNamesByCode(substr($idCard, 0, 6));
+            $parts = [];
+            if (!empty($names['province'])) $parts[] = $names['province'];
+            if (!empty($names['city']) && $names['city'] !== $names['province']) $parts[] = $names['city'];
+            $result['hometown'] = implode(' ', $parts);
+        } elseif ($len >= 2) {
             $provinceCode = substr($idCard, 0, 2);
             $result['hometown'] = self::$provinceMap[$provinceCode] ?? '';
         }
@@ -76,20 +85,28 @@ class ContactService extends BaseService
         $list = (new ContactModel())->getList($where, $param);
         $items = $list->items();
 
-        // 补充关联公司数
+        // 补充关联公司数和公司名
         if (!empty($items)) {
             $ids = array_column($items, 'id');
-            $counts = (new ContactCustomer())->db()
-                ->whereIn('contact_id', $ids)
-                ->field('contact_id, COUNT(*) as company_count')
-                ->group('contact_id')
+            $companies = (new ContactCustomer())->db()
+                ->alias('cc')
+                ->join('yoshop_crm_customer c', 'c.id = cc.customer_id AND c.is_delete = 0')
+                ->whereIn('cc.contact_id', $ids)
+                ->field('cc.contact_id, cc.customer_id, c.customer_name')
                 ->select()->toArray();
             $countMap = [];
-            foreach ($counts as $c) {
-                $countMap[$c['contact_id']] = $c['company_count'];
+            $nameMap = [];
+            $idMap = [];
+            foreach ($companies as $c) {
+                $countMap[$c['contact_id']] = ($countMap[$c['contact_id']] ?? 0) + 1;
+                $nameMap[$c['contact_id']][] = $c['customer_name'];
+                if (!isset($idMap[$c['contact_id']])) $idMap[$c['contact_id']] = [];
+                $idMap[$c['contact_id']][] = $c['customer_id'];
             }
             foreach ($items as &$row) {
                 $row['company_count'] = $countMap[$row['id']] ?? 0;
+                $row['company_names'] = $nameMap[$row['id']] ?? [];
+                $row['company_ids'] = $idMap[$row['id']] ?? [];
             }
         }
 
@@ -143,6 +160,15 @@ class ContactService extends BaseService
     {
         ContactCustomer::$storeId = $storeId;
         $list = (new ContactCustomer())->getByCustomerId($customerId);
+
+        // 附加每个联系人的标签
+        \mpp\crm\model\ContactTag::$storeId = $storeId;
+        $contactTagModel = new \mpp\crm\model\ContactTag();
+        foreach ($list as &$item) {
+            $item['tags'] = $contactTagModel->getByContact($item['id']);
+        }
+        unset($item);
+
         return ['success' => true, 'data' => ['list' => $list], 'error' => ''];
     }
 
@@ -180,12 +206,14 @@ class ContactService extends BaseService
                 'contact_name' => $data['contact_name'] ?? $existing['contact_name'],
                 'gender'       => $data['gender'] ?? $existing['gender'],
                 'birthday'     => $data['birthday'] ?? $existing['birthday'],
+                'is_lunar'     => $data['is_lunar'] ?? $existing['is_lunar'] ?? 0,
                 'id_card'      => $data['id_card'] ?? $existing['id_card'],
                 'hometown'     => $data['hometown'] ?? $existing['hometown'],
                 'address'      => $data['address'] ?? $existing['address'],
                 'email'        => $data['email'] ?? $existing['email'],
                 'wechat'       => $data['wechat'] ?? $existing['wechat'],
                 'telephone'    => $data['telephone'] ?? $existing['telephone'],
+                'remark'       => $data['remark'] ?? $existing['remark'],
                 'update_time'  => time(),
             ]);
         } else {
@@ -195,6 +223,7 @@ class ContactService extends BaseService
                 'mobile'       => $mobile,
                 'gender'       => $data['gender'] ?? 0,
                 'birthday'     => $data['birthday'] ?? '',
+                'is_lunar'     => $data['is_lunar'] ?? 0,
                 'id_card'      => $data['id_card'] ?? '',
                 'hometown'     => $data['hometown'] ?? '',
                 'address'      => $data['address'] ?? '',
@@ -218,6 +247,8 @@ class ContactService extends BaseService
         EventService::record('customer_updated', 'customer', $customerId, [
             'contact_bound' => true, 'contact_id' => $contactId, 'mobile_matched' => !!$existing,
         ], $actorUserId);
+
+        OperationLogService::logAdd('联系人', $contactId, $data['contact_name'] ?? $mobile);
 
         return ['success' => true, 'data' => [
             'id' => $contactId,
@@ -251,13 +282,14 @@ class ContactService extends BaseService
             if (!empty($bindData)) {
                 (new ContactCustomer())->bind($id, intval($data['customer_id']), $bindData);
             }
-            unset($data['customer_id'], $data['position'], $data['department'], $data['is_primary']);
+            unset($data['customer_id'], $data['position'], $data['department'], $data['is_primary'], $data['id']);
         }
 
         if ($detail->save($data)) {
             EventService::record('customer_updated', 'customer', $detail['customer_id'] ?? 0, [
                 'contact_edited' => true, 'contact_id' => $id,
             ], $actorUserId);
+            OperationLogService::logEdit('联系人', $id, $data['contact_name'] ?? ($detail['contact_name'] ?? ''), $data);
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $detail->getError() ?: '更新失败'];
@@ -286,6 +318,7 @@ class ContactService extends BaseService
             EventService::record('customer_updated', 'customer', 0, [
                 'contact_deleted' => true, 'contact_id' => $id,
             ], $actorUserId);
+            OperationLogService::logDelete('联系人', $id, $detail['contact_name'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => '删除失败'];

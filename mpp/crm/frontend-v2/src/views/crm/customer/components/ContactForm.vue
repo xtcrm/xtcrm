@@ -25,6 +25,11 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
+            <a-form-item label="身份证号" name="id_card" extra="填写后自动识别生日/性别/籍贯">
+              <a-input v-model:value="formState.id_card" placeholder="18位身份证号" :maxlength="18" @change="onIdCardChange" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
             <a-form-item label="性别" name="gender">
               <a-select v-model:value="formState.gender">
                 <a-select-option :value="0">未知</a-select-option>
@@ -39,8 +44,8 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="身份证号" name="id_card" extra="填写后自动识别生日/性别/籍贯">
-              <a-input v-model:value="formState.id_card" placeholder="18位身份证号" :maxlength="18" @change="onIdCardChange" />
+            <a-form-item name="is_lunar" :label-col="{span:0}" :wrapper-col="{span:24}">
+              <a-switch v-model:checked="formState.is_lunar" :checked-value="1" :unchecked-value="0" checked-children="农历" un-checked-children="公历" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -91,27 +96,42 @@
               <a-textarea v-model:value="formState.remark" placeholder="备注" :rows="2" />
             </a-form-item>
           </a-col>
+          <a-col :span="24">
+            <a-form-item label="标签" :label-col="{ span: 3 }" :wrapper-col="{ span: 20 }">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+                <template v-if="formState.tag_names.length">
+                  <a-tag v-for="name in formState.tag_names" :key="name" closable @close="removeContactTag(name)">{{ name }}</a-tag>
+                </template>
+                <span v-else style="color:#999">暂无标签</span>
+                <a-button size="small" type="link" style="padding:0;height:auto" @click="tagPickerOpen = true">选择标签</a-button>
+              </div>
+            </a-form-item>
+          </a-col>
         </a-row>
       </a-form>
     </a-spin>
   </a-modal>
+  <TagPicker v-model:open="tagPickerOpen" target-type="contact" :model-value="formState.tag_names" @update:model-value="names => formState.tag_names = names" />
 </template>
 
 <script setup>
 import { ref, reactive, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
-import { add, edit, lookupByMobile } from '@/api/crm/contact'
+import { add, edit, lookupByMobile, parseIdCard } from '@/api/crm/contact'
+import { getContactTags, setContactTags } from '@/api/crm/tag'
+import TagPicker from '@/views/crm/components/TagPicker.vue'
 
 const props = defineProps({ open: Boolean, mdl: Object, customerId: [Number, String] })
 const emit = defineEmits(['update:open', 'ok'])
 
 const formRef = ref()
 const loading = ref(false)
+const tagPickerOpen = ref(false)
 
 const emptyForm = () => ({
-  contact_name: '', mobile: '', gender: 0, birthday: '', id_card: '',
+  contact_name: '', mobile: '', gender: 0, birthday: '', is_lunar: 0, id_card: '',
   hometown: '', email: '', wechat: '', telephone: '', address: '',
-  position: '', department: '', is_primary: false, remark: '',
+  position: '', department: '', is_primary: false, remark: '', tag_names: [],
 })
 
 const formState = reactive(emptyForm())
@@ -132,6 +152,7 @@ function onPhoneChange() {
         if (!formState.contact_name) formState.contact_name = d.contact.contact_name
         if (!formState.gender) formState.gender = d.contact.gender || 0
         if (!formState.birthday) formState.birthday = d.contact.birthday || ''
+        if (d.contact.is_lunar !== undefined) formState.is_lunar = d.contact.is_lunar
         if (!formState.id_card) formState.id_card = d.contact.id_card || ''
         if (!formState.hometown) formState.hometown = d.contact.hometown || ''
         if (!formState.email) formState.email = d.contact.email || ''
@@ -145,21 +166,19 @@ function onPhoneChange() {
   }, 400)
 }
 
+let idCardTimer = null
 function onIdCardChange() {
   const id = formState.id_card?.trim() || ''
+  clearTimeout(idCardTimer)
   if (id.length !== 18 && id.length !== 15) return
-  const birth = id.length === 18 ? id.substring(6, 14) : '19' + id.substring(6, 12)
-  const y = parseInt(birth.substring(0, 4))
-  const m = parseInt(birth.substring(4, 6))
-  const d = parseInt(birth.substring(6, 8))
-  if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-    formState.birthday = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-  }
-  const genderIdx = id.length === 18 ? 16 : 14
-  const genderCode = parseInt(id.charAt(genderIdx))
-  formState.gender = genderCode % 2 === 1 ? 1 : 2
-  const provMap = { '11':'北京','12':'天津','13':'河北','14':'山西','15':'内蒙古','21':'辽宁','22':'吉林','23':'黑龙江','31':'上海','32':'江苏','33':'浙江','34':'安徽','35':'福建','36':'江西','37':'山东','41':'河南','42':'湖北','43':'湖南','44':'广东','45':'广西','46':'海南','50':'重庆','51':'四川','52':'贵州','53':'云南','54':'西藏','61':'陕西','62':'甘肃','63':'青海','64':'宁夏','65':'新疆','71':'台湾','81':'香港','82':'澳门' }
-  formState.hometown = provMap[id.substring(0, 2)] || ''
+  idCardTimer = setTimeout(() => {
+    parseIdCard(id).then(res => {
+      const d = res?.data || res || {}
+      if (d.birthday) formState.birthday = d.birthday
+      if (d.gender) formState.gender = d.gender
+      if (d.hometown) formState.hometown = d.hometown
+    }).catch(() => {})
+  }, 300)
 }
 
 watch(() => props.open, (v) => {
@@ -171,6 +190,7 @@ watch(() => props.open, (v) => {
         mobile: props.mdl.mobile || '',
         gender: props.mdl.gender ?? 0,
         birthday: props.mdl.birthday || '',
+        is_lunar: props.mdl.is_lunar ?? 0,
         id_card: props.mdl.id_card || '',
         hometown: props.mdl.hometown || '',
         email: props.mdl.email || '',
@@ -181,7 +201,12 @@ watch(() => props.open, (v) => {
         department: props.mdl.department || '',
         is_primary: !!props.mdl.is_primary,
         remark: props.mdl.remark || '',
+        tag_names: [],
       })
+      // 加载已有标签
+      getContactTags(props.mdl.id).then(res => {
+        formState.tag_names = res?.data?.names || []
+      }).catch(() => {})
     })
   } else if (v) {
     nextTick(() => {
@@ -196,17 +221,32 @@ function handleSubmit() {
     loading.value = true
     values.customer_id = props.customerId
     values.is_primary = values.is_primary ? 1 : 0
+    const tagNames = formState.tag_names || []
+    delete values.tag_names
     const fn = props.mdl?.id ? edit : add
     if (props.mdl?.id) values.id = props.mdl.id
     fn(values).then((res) => {
-      const msg = res?.data?.msg || res?.msg || '保存成功'
-      message.success(msg)
-      loading.value = false
-      emit('update:open', false)
-      emit('ok')
+      // 保存成功后更新标签
+      const contactId = res?.data?.contact?.id || props.mdl?.id
+      if (contactId && tagNames.length !== undefined) {
+        setContactTags(contactId, tagNames).finally(() => {
+          loading.value = false
+          emit('update:open', false)
+          emit('ok')
+        })
+      } else {
+        loading.value = false
+        emit('update:open', false)
+        emit('ok')
+      }
     }).catch(() => { loading.value = false })
   }).catch(() => {})
 }
 
 function handleCancel() { emit('update:open', false) }
+
+function removeContactTag(name) {
+  const i = formState.tag_names.indexOf(name)
+  if (i >= 0) formState.tag_names.splice(i, 1)
+}
 </script>

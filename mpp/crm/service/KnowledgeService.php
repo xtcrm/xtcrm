@@ -2,6 +2,7 @@
 namespace mpp\crm\service;
 
 use app\platform\BaseService;
+use mpp\crm\service\OperationLogService;
 use mpp\crm\model\Knowledge as KnowledgeModel;
 
 class KnowledgeService extends BaseService
@@ -23,6 +24,7 @@ class KnowledgeService extends BaseService
     {
         $model = new KnowledgeModel();
         if ($model->add($data)) {
+            OperationLogService::logAdd('知识库', $model->id, $data['title'] ?? '');
             return ['success' => true, 'data' => ['id' => $model->id], 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '添加失败'];
@@ -34,6 +36,7 @@ class KnowledgeService extends BaseService
         $row = $model->where('id', $id)->find();
         if (!$row) return ['success' => false, 'data' => null, 'error' => '记录不存在'];
         if ($row->edit($data)) {
+            OperationLogService::logEdit('知识库', $id, $data['title'] ?? ($row['title'] ?? ''), $data);
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $row->getError() ?: '更新失败'];
@@ -46,6 +49,7 @@ class KnowledgeService extends BaseService
         if (!$row) return ['success' => false, 'data' => null, 'error' => '记录不存在'];
         $row->is_delete = 1;
         if ($row->save()) {
+            OperationLogService::logDelete('知识库', $id, $row['title'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => '删除失败'];

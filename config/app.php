@@ -22,6 +22,7 @@ return [
         'admin'  =>  'admin',
         'store'  =>  'store',
         'api'    =>  'api',
+        'v1'     =>  'v1',
     ],
     // 域名绑定（自动多应用模式有效）
     'domain_bind'      => [],

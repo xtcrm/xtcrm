@@ -23,7 +23,21 @@ export default defineConfig({
   server: {
     port: 9999,
     host: '0.0.0.0',
+    strictPort: true,
+    proxy: {
+      '/crm.ai': {
+        target: 'http://127.0.0.1',
+        changeOrigin: true,
+        rewrite: (path) => '/index.php?s=/platform' + path,
+      },
+      '/crm.agent': {
+        target: 'http://127.0.0.1',
+        changeOrigin: true,
+        rewrite: (path) => '/index.php?s=/platform' + path,
+      },
+    },
   },
+  clearScreen: false,   // Tauri: 保留终端日志可见
   build: {
     outDir: '../../../public/crm',
     emptyOutDir: true,

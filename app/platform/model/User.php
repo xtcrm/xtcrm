@@ -25,7 +25,7 @@ class User extends BaseModel
     public function getDepartmentNameAttr($value, $data): string
     {
         if (empty($data['department_id'])) return '';
-        $dept = Db::name('store_department')->where('id', $data['department_id'])->where('store_id', $data['store_id'] ?? 0)->find();
+        $dept = Db::name('store_department')->where('id', $data['department_id'])->find();
         return $dept ? $dept['department_name'] : '';
     }
 
@@ -159,14 +159,16 @@ class User extends BaseModel
             $this->error = '确认密码不正确';
             return false;
         }
-        if (empty($data['roles'])) {
+        // 超管不需要角色
+        $isSuper = !empty($data['is_super']);
+        if (empty($data['roles']) && !$isSuper) {
             $this->error = '请选择所属角色';
             return false;
         }
 
         $data['password'] = encryption_hash($data['password']);
         $data['store_id']  = self::$storeId;
-        $data['is_super']  = 0;
+        $data['is_super']  = $isSuper ? 1 : 0;
 
         $roleIds = self::normalizeRoles($data['roles'] ?? []);
 
@@ -189,10 +191,15 @@ class User extends BaseModel
             $this->error = '确认密码不正确';
             return false;
         }
-        if (empty($data['roles']) && !$this['is_super']) {
+        // is_super 允许修改，先更新再校验（后续角色检查依赖新值）
+        $willBeSuper = array_key_exists('is_super', $data) ? ($data['is_super'] ? 1 : 0) : (int)$this['is_super'];
+
+        if (empty($data['roles']) && !$willBeSuper) {
             $this->error = '请选择所属角色';
             return false;
         }
+
+        $this->is_super = $willBeSuper;
 
         if (!empty($data['password'])) {
             $data['password'] = encryption_hash($data['password']);

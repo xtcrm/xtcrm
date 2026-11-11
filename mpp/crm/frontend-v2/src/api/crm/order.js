@@ -6,3 +6,7 @@ export function add(d) { return request({ url: '/crm.order/add', method: 'post',
 export function edit(d) { return request({ url: '/crm.order/edit', method: 'post', data: d }) }
 export function deleteById(id) { return request({ url: '/crm.order/delete', method: 'post', data: { id } }) }
 export function changeStatus(id, status) { return request({ url: '/crm.order/changeStatus', method: 'post', data: { id, status } }) }
+
+export function generatePeriods(orderId) {
+  return request({ url: '/crm.order/generatePeriods', method: 'post', data: { order_id: orderId } })
+}

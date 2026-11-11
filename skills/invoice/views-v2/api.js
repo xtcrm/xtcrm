@@ -1,5 +1,8 @@
 import request from '@/utils/request'
 
+// 仪表盘
+export function getDashboard(companyId) { return request({ url: '/invoice.invoice/dashboard', method: 'get', params: { company_id: companyId } }) }
+
 // 发票
 export function getInvoiceList(params) { return request({ url: '/invoice.invoice/lists', method: 'get', params }) }
 export function getInvoiceDetail(id) { return request({ url: '/invoice.invoice/detail', method: 'get', params: { id } }) }
@@ -21,3 +24,7 @@ export function unbindMember(data) { return request({ url: '/invoice.company/unb
 // 短信
 export function getSmsTemplates() { return request({ url: '/invoice.config/smsTemplates', method: 'get' }) }
 export function saveSmsTemplates(data) { return request({ url: '/invoice.config/saveSmsTemplates', method: 'post', data }) }
+
+// 预警
+export function getAlertConfig() { return request({ url: '/invoice.config/alertConfig', method: 'get' }) }
+export function saveAlertConfig(data) { return request({ url: '/invoice.config/saveAlertConfig', method: 'post', data }) }

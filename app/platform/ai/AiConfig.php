@@ -9,8 +9,13 @@ use think\facade\Db;
 /**
  * AI 配置读取
  *
- * 从 yoshop_config 表读取 AI 相关配置（config_type='crm_setting'）。
- * 各模块共享同一套 AI 配置，不区分模块。
+ * 所有模块共享同一套 AI 配置，不区分模块。
+ *
+ * 读取顺序：
+ *   1. llm_setting（商城全局 AI 配置，设置 → AI 配置 维护，支持平台/自定义接入）
+ *   2. crm_setting（历史命名空间，未迁移的租户继续沿用）
+ *
+ * 新代码一律用 AiGateway，不要直接读 config 表。
  */
 class AiConfig
 {
@@ -20,7 +25,7 @@ class AiConfig
         'api_key'     => '',
         'model'       => 'deepseek-chat',
         'temperature' => 0.7,
-        'max_tokens'  => 1024,
+        'max_tokens'  => 4096,
     ];
 
     /** @var array<string, array> 按 store_id 缓存 */
@@ -44,6 +49,21 @@ class AiConfig
         $cacheKey = 'store_' . $storeId;
         if (isset(self::$cache[$cacheKey])) return self::$cache[$cacheKey];
 
+        // 1. 商城全局 AI 配置优先
+        $shared = AiSetting::get($storeId);
+        if (!empty($shared['api_key'])) {
+            $cfg = [
+                'api_url'     => AiSetting::endpoint($shared),
+                'api_key'     => (string)$shared['api_key'],
+                'model'       => (string)$shared['model'],
+                'temperature' => (float)$shared['temperature'],
+                'max_tokens'  => (int)$shared['max_tokens'],
+            ];
+            self::$cache[$cacheKey] = $cfg;
+            return $cfg;
+        }
+
+        // 2. 回退到历史命名空间 crm_setting
         $rows = Db::name('config')
             ->where('config_type', 'crm_setting')
             ->where(function ($q) use ($storeId) {
@@ -112,6 +132,7 @@ class AiConfig
     /** 清除缓存（配置更新后调用） */
     public static function clearCache(?int $storeId = null): void
     {
+        AiSetting::clearCache($storeId);
         if ($storeId !== null) {
             unset(self::$cache['store_' . $storeId]);
         } else {

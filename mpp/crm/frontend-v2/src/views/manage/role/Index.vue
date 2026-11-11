@@ -3,7 +3,8 @@
     <div class="table-operator">
       <a-button type="primary" @click="handleAdd"><plus-outlined /> 新增</a-button>
     </div>
-    <a-table :columns="columns" :data-source="dataSource" :loading="loading" :pagination="false" :default-expand-all-rows="true" row-key="role_id">
+    <a-table :columns="columns" :data-source="dataSource" :loading="loading" :pagination="false"
+      :expanded-row-keys="expandedKeys" row-key="role_id" @expand="onExpand">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
           <a @click="handleEdit(record)">编辑</a>
@@ -32,15 +33,30 @@ console.log('[manage/role] setup')
 
 const loading = ref(false)
 const dataSource = ref([])
+const expandedKeys = ref([])
+
+/** 展开所有有下级的角色（数据异步加载，default-expand-all-rows 不生效，用受控 keys） */
+function expandableIds(list, acc = []) {
+  (list || []).forEach(r => {
+    if (r.children?.length) { acc.push(r.role_id); expandableIds(r.children, acc) }
+  })
+  return acc
+}
+function onExpand(expanded, record) {
+  expandedKeys.value = expanded
+    ? [...new Set([...expandedKeys.value, record.role_id])]
+    : expandedKeys.value.filter(k => k !== record.role_id)
+}
 const menuList = ref([])
 const addRef = ref()
 const editRef = ref()
 
+// 树形表格：缩进/展开箭头落在第一列，所以角色名称放前面
 const columns = [
-  { title: '角色ID', dataIndex: 'role_id' },
   { title: '角色名称', dataIndex: 'role_name' },
-  { title: '排序', dataIndex: 'sort' },
-  { title: '添加时间', dataIndex: 'create_time' },
+  { title: '角色ID', dataIndex: 'role_id', width: 100 },
+  { title: '排序', dataIndex: 'sort', width: 80 },
+  { title: '添加时间', dataIndex: 'create_time', width: 180 },
   { title: '操作', key: 'action', width: 120 },
 ]
 
@@ -50,7 +66,10 @@ async function loadData() {
   loading.value = true
   try {
     const res = await RoleApi.list({})
-    if (res?.status === 200) dataSource.value = res.data?.list || []
+    if (res?.status === 200) {
+      dataSource.value = res.data?.list || []
+      expandedKeys.value = expandableIds(dataSource.value)
+    }
   } finally { loading.value = false }
 }
 

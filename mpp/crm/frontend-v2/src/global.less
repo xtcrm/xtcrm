@@ -29,3 +29,23 @@ body {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, #f5f0e8 0%, #e8e4db 100%);
 }
+
+// 页面切换过渡。
+// 放在全局而非 BasicLayout 的 scoped 里 —— Transition 实际挂在 TabPageView 渲染出的
+// 页面根节点上，scoped 属性对不上，写在组件里不会生效。
+// ⚠️ 配套的 Transition 不能加 mode="out-in"（原因见 TabPageView.vue）。
+.page-fade-enter-active, .page-fade-leave-active { transition: all 0.2s ease; }
+.page-fade-enter-from { opacity: 0; transform: translateY(6px); }
+.page-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+
+// 默认模式（非 out-in）下新旧页面在过渡期间会同时留在 DOM 里。若都占正常流，
+// 两个块级元素会上下堆叠 —— 内容区高度瞬间翻倍，整页跳一下。
+// 让"正在离场"的那个脱离文档流，两者就地重叠，才是淡入淡出该有的样子。
+// 20px 对应 .main-content 的 padding:20px，改那边记得一起改。
+.page-fade-leave-active {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+}
+

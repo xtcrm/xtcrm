@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, getUserInfo, getStoreInfo } from '@/api/login'
 import { storage } from '@/utils/request'
+import { useTabsStore } from '@/stores/tabs'
+import { useAiStore } from '@/stores/ai'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(storage.get('ACCESS_TOKEN') || '')
@@ -51,6 +53,13 @@ export const useUserStore = defineStore('user', () => {
     storage.remove('ACCESS_TOKEN')
     storage.remove('USER_INFO')
     storage.remove('ROLES')
+
+    // 页签里存着客户名等业务数据，且登录走的是 router.replace（不整页刷新），
+    // 不清掉的话换账号登录后，上一个账号的页签会原样留在页签栏里。
+    // 放在这里而不是各个登出按钮里，是为了以后新增登出入口不会再漏。
+    useTabsStore().reset()
+    // AI 面板同理：messages 是对话内容，currentContext 里还有客户名/行业
+    useAiStore().reset()
   }
 
   return {

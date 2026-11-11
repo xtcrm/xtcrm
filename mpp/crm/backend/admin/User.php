@@ -148,6 +148,13 @@ class User extends BaseController
             ->select()
             ->toArray();
 
+        // skill 租户可见性：移除未开通 skill 的菜单与操作项
+        $prefixes = \cores\SkillAccess::disabledMenuPrefixes((int)$this->storeId);
+        if (!empty($prefixes)) {
+            $menus = $this->filterRowsByPrefixes($menus, $prefixes);
+            $actions = $this->filterRowsByPrefixes($actions, $prefixes);
+        }
+
         $actionsByParent = [];
         foreach ($actions as $a) {
             $pid = $a['parent_id'] ?? 0;
@@ -173,6 +180,20 @@ class User extends BaseController
             ];
         }
         return $result;
+    }
+
+    /**
+     * 按 skill 菜单前缀过滤菜单/操作行
+     */
+    private function filterRowsByPrefixes(array $rows, array $prefixes): array
+    {
+        return array_values(array_filter($rows, function ($row) use ($prefixes) {
+            $path = (string)($row['path'] ?? '');
+            foreach ($prefixes as $prefix) {
+                if ($prefix !== '' && strpos($path, $prefix) === 0) return false;
+            }
+            return true;
+        }));
     }
 
     /**

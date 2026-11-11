@@ -115,7 +115,7 @@ abstract class BaseController extends CoreBaseController
         if (is_string($rule) && $rule == $method) return;
 
         throwError('illegal request method');
-    }
+    } 
 
     // ── 用户 ──
 

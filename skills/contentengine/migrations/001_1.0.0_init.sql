@@ -1,4 +1,6 @@
 -- ==========================================
+-- ⚠️ 菜单 INSERT 加 IGNORE（2026-10）：menu_id 是显式写的，重跑撞主键 1062 会中断整个文件
+-- ⇒ 版本号落不了库 ⇒ 每个请求重跑（日志里从 6 月刷到现在）。
 -- content-engine v1.0.0 初始安装
 -- 首次部署用，建表 + 菜单 + 权限
 -- ==========================================
@@ -19,7 +21,7 @@ CREATE TABLE IF NOT EXISTS `yoshop_crm_content_topic` (`id` int NOT NULL AUTO_IN
 CREATE TABLE IF NOT EXISTS `yoshop_crm_content_output` (`id` int NOT NULL AUTO_INCREMENT, `store_id` int NOT NULL, `topic_id` int NOT NULL, `format` varchar(16) NOT NULL, `title` varchar(300) NOT NULL, `content` longtext, `keywords_used` varchar(500), `solution_id` int DEFAULT 0, `word_count` int DEFAULT 0, `status` tinyint DEFAULT 1, `publish_url` varchar(500), `publish_time` int DEFAULT NULL, `views` int DEFAULT 0, `inquiries` int DEFAULT 0, `create_time` int DEFAULT NULL, `update_time` int DEFAULT NULL, PRIMARY KEY (`id`), KEY `idx_topic` (`topic_id`), KEY `idx_store_status` (`store_id`, `status`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 6. 菜单：内容创作（挂在知识库 10559 下）
-INSERT INTO `yoshop_store_menu` (`menu_id`, `name`, `path`, `parent_id`, `module`, `fun_type`, `sort`, `create_time`, `update_time`) VALUES
+INSERT IGNORE INTO `yoshop_store_menu` (`menu_id`, `name`, `path`, `parent_id`, `module`, `fun_type`, `sort`, `create_time`, `update_time`) VALUES
 (10700, '内容创作', '/crm/content', 10559, 10, 'crm', 50, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
 (10701, '公司档案', '/crm/content/profile', 10700, 10, 'crm', 100, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
 (10710, '关键词管理', '/crm/content/keywords', 10700, 10, 'crm', 110, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
@@ -29,7 +31,7 @@ INSERT INTO `yoshop_store_menu` (`menu_id`, `name`, `path`, `parent_id`, `module
 (10760, '内容效果', '/crm/content/analytics', 10700, 10, 'crm', 150, UNIX_TIMESTAMP(), UNIX_TIMESTAMP());
 
 -- 7. 操作权限（module=20）
-INSERT INTO `yoshop_store_menu` (`menu_id`, `name`, `path`, `parent_id`, `module`, `fun_type`, `sort`, `action_mark`, `create_time`, `update_time`) VALUES
+INSERT IGNORE INTO `yoshop_store_menu` (`menu_id`, `name`, `path`, `parent_id`, `module`, `fun_type`, `sort`, `action_mark`, `create_time`, `update_time`) VALUES
 (10702, '编辑档案', '/crm.profile/edit', 10701, 20, 'crm', 100, 'edit', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
 (10703, '查看档案', '/crm.profile/detail', 10701, 20, 'crm', 110, 'detail', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),
 (10711, '添加关键词', '/crm.keyword/add', 10710, 20, 'crm', 100, 'add', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()),

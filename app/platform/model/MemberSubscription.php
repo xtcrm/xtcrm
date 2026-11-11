@@ -19,7 +19,7 @@ class MemberSubscription extends BaseModel
     public static function getActiveByUserId(int $storeUserId): array
     {
         return \think\facade\Db::name('member_user')->alias('mu')
-            ->join('member_service ms', 'mu.service_id = ms.id')
+            ->join('yoshop_member_service ms', 'mu.service_id = ms.id')
             ->where('mu.user_id', $storeUserId)
             ->where('mu.status', 1)
             ->field('mu.*, ms.name as service_name, ms.type as service_type')

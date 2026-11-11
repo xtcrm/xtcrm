@@ -19,7 +19,7 @@
       <a-descriptions-item label="联系人">{{ detail.contact_person }}</a-descriptions-item>
       <a-descriptions-item label="电话">{{ detail.contact_phone }}</a-descriptions-item>
       <a-descriptions-item label="职位">{{ detail.contact_position }}</a-descriptions-item>
-      <a-descriptions-item label="来源">{{ detail.source }}</a-descriptions-item>
+      <a-descriptions-item label="来源">{{ sourceName(detail.source) }}</a-descriptions-item>
       <a-descriptions-item label="行业">{{ detail.industry }}</a-descriptions-item>
       <a-descriptions-item label="优先级">{{ detail.priority_text }}</a-descriptions-item>
       <a-descriptions-item label="预计金额">{{ (detail.expected_amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }} 元</a-descriptions-item>
@@ -28,10 +28,9 @@
       <a-descriptions-item v-if="detail.customer_id" label="已转客户">
         <a @click="router.push({ path: '/crm/customer/detail', query: { id: detail.customer_id } })">#{{ detail.customer_id }}</a>
       </a-descriptions-item>
+      <a-descriptions-item v-if="detail.requirement" label="需求描述" :span="2">{{ detail.requirement }}</a-descriptions-item>
+      <a-descriptions-item v-if="detail.remark" label="备注" :span="2">{{ detail.remark }}</a-descriptions-item>
     </a-descriptions>
-
-    <a-divider v-if="detail.requirement" />
-    <p v-if="detail.requirement"><strong>需求描述：</strong>{{ detail.requirement }}</p>
 
     <LeadForm v-model:open="formVisible" :mdl="detail" @ok="loadDetail" />
   </a-card>
@@ -42,16 +41,33 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getDetail, deleteById, convert } from '@/api/crm/lead'
+import { getAll as getConfigs } from '@/api/crm/config'
 import LeadForm from './components/LeadForm.vue'
+import { useTabsStore, tabKeyOf } from '@/stores/tabs'
 
 const route = useRoute()
 const router = useRouter()
+const tabsStore = useTabsStore()
 const detail = reactive({})
 const formVisible = ref(false)
+const configMap = reactive({ customer_source: {} })
 
+function loadConfigs() {
+  getConfigs().then(res => {
+    const data = res?.data || {}
+    ;['customer_source'].forEach(k => {
+      (data[k] || []).forEach(i => { if (i.config_value) configMap[k][i.config_value] = i.config_name })
+    })
+  })
+}
+
+function sourceName(v) { return configMap.customer_source[v] || v }
 function loadDetail() {
+  // 捕获页签 key：本页被 keep-alive 缓存，异步响应回来时 route 可能已变
+  const tabKey = tabKeyOf(route)
   getDetail(route.query.id).then(r => {
     Object.assign(detail, r?.data?.d || r?.data?.detail || r?.data || {})
+    tabsStore.setTitle(tabKey, detail.lead_name)
   }).catch(() => {})
 }
 
@@ -66,5 +82,5 @@ function handleDelete() {
   deleteById(detail.id).then(() => { message.success('已删除'); router.go(-1) })
 }
 
-onMounted(() => { loadDetail() })
+onMounted(() => { loadConfigs(); loadDetail() })
 </script>

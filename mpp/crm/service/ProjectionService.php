@@ -55,24 +55,24 @@ class ProjectionService extends BaseService
         $this->saveProjection('funnel_stats', 'overall', $data, $storeId, $now);
     }
 
-    /** 业务员业绩 */
+    /** 业务员业绩（口径 = 回款确认的业绩记录，不再是订单金额） */
     protected function refreshUserPerformance(int $storeId, int $now): void
     {
-        // 本月订单按负责人汇总
-        $monthStart = strtotime(date('Y-m-01'));
-        $rows = Db::name('crm_order')
-            ->where('store_id', $storeId)->where('is_delete', 0)
-            ->where('create_time', '>=', $monthStart)
-            ->field('owner_user_id, COUNT(*) as order_count, SUM(final_amount) as total_amount')
-            ->group('owner_user_id')->select()->toArray();
+        $month = date('Y-m');
+        $rows = Db::name('crm_commission_record')
+            ->where('store_id', $storeId)->where('confirm_month', $month)
+            ->field('user_id, COUNT(*) as record_count, SUM(amount) as total_amount')
+            ->group('user_id')->select()->toArray();
 
         foreach ($rows as $r) {
             $data = [
-                'order_count' => intval($r['order_count']),
+                'order_count'  => intval($r['record_count']),
+                'record_count' => intval($r['record_count']),
                 'total_amount' => floatval($r['total_amount']),
-                'month' => date('Y-m'),
+                'month'        => $month,
+                'source'       => 'commission',
             ];
-            $this->saveProjection('user_performance', 'user:' . $r['owner_user_id'], $data, $storeId, $now);
+            $this->saveProjection('user_performance', 'user:' . $r['user_id'], $data, $storeId, $now);
         }
     }
 
@@ -104,25 +104,25 @@ class ProjectionService extends BaseService
     /** 团队排名 */
     protected function refreshTeamRanking(int $storeId, int $now): void
     {
-        $monthStart = strtotime(date('Y-m-01'));
-        $rows = Db::name('crm_order')
-            ->where('store_id', $storeId)->where('is_delete', 0)
-            ->where('create_time', '>=', $monthStart)
-            ->field('owner_user_id, SUM(final_amount) as total_amount')
-            ->group('owner_user_id')
+        $month = date('Y-m');
+        $rows = Db::name('crm_commission_record')
+            ->where('store_id', $storeId)->where('confirm_month', $month)
+            ->field('user_id, SUM(amount) as total_amount')
+            ->group('user_id')
             ->order('total_amount', 'desc')->select()->toArray();
 
         $ranking = [];
         foreach ($rows as $i => $r) {
             $user = Db::name('store_user')
-                ->where('store_user_id', $r['owner_user_id'])
+                ->where('store_id', $storeId)
+                ->where('store_user_id', $r['user_id'])
                 ->field('real_name, user_name')->find();
             $ranking[] = [
                 'rank' => $i + 1,
-                'user_id' => intval($r['owner_user_id']),
-                'name' => $user['real_name'] ?? $user['user_name'] ?? '未知',
+                'user_id' => intval($r['user_id']),
+                'name' => ($user['real_name'] ?? '') ?: ($user['user_name'] ?? '未知'),
                 'amount' => floatval($r['total_amount']),
-                'month' => date('Y-m'),
+                'month' => $month,
             ];
         }
 
@@ -138,11 +138,12 @@ class ProjectionService extends BaseService
             $m = date('Y-m', strtotime("-{$i} months", $base));
             $start = strtotime($m . '-01');
             $end = strtotime($m . '-01 +1 month');
-            $amount = Db::name('crm_order')
+            // 营收 = 实际到账（回款），不是下单金额
+            $amount = Db::name('crm_payment')
                 ->where('store_id', $storeId)->where('is_delete', 0)
-                ->where('create_time', '>=', $start)
-                ->where('create_time', '<', $end)
-                ->sum('final_amount');
+                ->where('paid_at', '>=', $start)
+                ->where('paid_at', '<', $end)
+                ->sum('amount');
             $trend[] = ['month' => $m, 'amount' => floatval($amount ?: 0)];
         }
 
@@ -165,6 +166,16 @@ class ProjectionService extends BaseService
             ->where('create_time', '>=', $lastMonthStart)->where('create_time', '<', $monthStart)
             ->field('COUNT(*) as cnt, SUM(final_amount) as amount')->find();
 
+        // 营收与业绩都按回款口径
+        $thisMonthRevenue = Db::name('crm_payment')
+            ->where('store_id', $storeId)->where('is_delete', 0)
+            ->where('paid_at', '>=', $monthStart)->sum('amount');
+        $lastMonthRevenue = Db::name('crm_payment')
+            ->where('store_id', $storeId)->where('is_delete', 0)
+            ->where('paid_at', '>=', $lastMonthStart)->where('paid_at', '<', $monthStart)->sum('amount');
+        $commissionAmount = Db::name('crm_commission_record')
+            ->where('store_id', $storeId)->where('confirm_month', date('Y-m'))->sum('amount');
+
         $newCustomers = Db::name('crm_customer')
             ->where('store_id', $storeId)->where('is_delete', 0)
             ->where('create_time', '>=', $monthStart)->count();
@@ -172,8 +183,10 @@ class ProjectionService extends BaseService
         $data = [
             'month' => date('Y-m'),
             'order_count' => intval($thisMonth['cnt'] ?? 0),
-            'revenue' => floatval($thisMonth['amount'] ?? 0),
-            'last_month_revenue' => floatval($lastMonth['amount'] ?? 0),
+            'order_amount' => floatval($thisMonth['amount'] ?? 0),
+            'revenue' => floatval($thisMonthRevenue ?: 0),
+            'last_month_revenue' => floatval($lastMonthRevenue ?: 0),
+            'commission_amount' => floatval($commissionAmount ?: 0),
             'new_customers' => $newCustomers,
         ];
 

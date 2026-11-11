@@ -10,8 +10,10 @@ class Customer extends BaseController
         'lists' => 'GET', 'select' => 'GET', 'detail' => 'GET',
         'poolLists' => 'GET', 'collabLists' => 'GET', 'checkName' => 'GET',
         'add' => 'POST', 'edit' => 'POST', 'delete' => 'POST',
+        'batchUpdate' => 'POST', 'batchDelete' => 'POST',
         'claim' => 'POST', 'release' => 'POST', 'changeStatus' => 'POST',
         'analyze' => 'POST', 'portrait' => 'POST', 'smartSearch' => 'POST',
+        'assignLists' => 'GET', 'assignCs' => 'POST', 'claimCs' => 'POST', 'setCs' => 'POST',
     ];
 
     protected function getUserId(): int
@@ -29,7 +31,8 @@ class Customer extends BaseController
     public function select()
     {
         if(!$this->checkAction('/crm/customer/select','客户查询')) return;
-        $result = (new CustomerService())->select();
+        $params = $this->request->param();
+        $result = (new CustomerService())->select($params);
         return $this->renderSuccess($result['data']);
     }
 
@@ -101,6 +104,48 @@ class Customer extends BaseController
         return $this->renderError($result['error']);
     }
 
+    // ------------------------------------------------------------------
+    // 客服责任位
+    // ------------------------------------------------------------------
+
+    public function assignLists()
+    {
+        if (!$this->checkAction('/crm/customer/assignLists', '查询待分配')) return;
+        $result = (new CustomerService())->getAssignList($this->request->param());
+        return $this->renderSuccess($result['data']);
+    }
+
+    public function assignCs()
+    {
+        if (!$this->checkAction('/crm/customer/assignCs', '分配客服')) return;
+        $data = $this->postData();
+        $result = (new CustomerService())->assignCs(
+            (int)($data['id'] ?? 0), (int)($data['cs_user_id'] ?? 0), $this->getUserId()
+        );
+        if (!$result['success']) return $this->renderError($result['error']);
+        return $this->renderSuccess([], '已分配客服');
+    }
+
+    public function claimCs()
+    {
+        if (!$this->checkAction('/crm/customer/claimCs', '认领客户')) return;
+        $id = (int)$this->request->param('id', 0);
+        $result = (new CustomerService())->claimCs($id, $this->getUserId());
+        if (!$result['success']) return $this->renderError($result['error']);
+        return $this->renderSuccess([], '认领成功');
+    }
+
+    public function setCs()
+    {
+        if (!$this->checkAction('/crm/customer/setCs', '变更服务责任人')) return;
+        $data = $this->postData();
+        $result = (new CustomerService())->assignCs(
+            (int)($data['id'] ?? 0), (int)($data['cs_user_id'] ?? 0), $this->getUserId()
+        );
+        if (!$result['success']) return $this->renderError($result['error']);
+        return $this->renderSuccess([], '服务责任人已变更');
+    }
+
     public function claim()
     {
         if(!$this->checkAction('/crm/customer/claim','认领客户')) return;
@@ -153,5 +198,34 @@ class Customer extends BaseController
         $result = (new CustomerService())->smartSearch($query);
         if (!$result['success']) return $this->renderError($result['error']);
         return $this->renderSuccess($result['data'], '解析成功');
+    }
+
+    public function batchUpdate()
+    {
+        if(!$this->checkAction('/crm/customer/edit','编辑客户')) return;
+        $ids   = $this->request->post('ids/a', []);
+        $field = $this->request->post('field', '');
+        $value = $this->request->post('value', '');
+        if (empty($ids)) return $this->renderError('请选择客户');
+        // 只允许修改这四类分类字段
+        $allowed = ['customer_group', 'source', 'level_name', 'industry'];
+        if (!in_array($field, $allowed)) return $this->renderError('不支持的批量修改字段: ' . $field);
+        $storeId = $this->storeId;
+        $count = \think\facade\Db::name('crm_customer')
+            ->whereIn('id', $ids)->where('store_id', $storeId)
+            ->update([$field => $value, 'update_time' => time()]);
+        return $this->renderSuccess(['count' => $count], "已更新 {$count} 条");
+    }
+
+    public function batchDelete()
+    {
+        if(!$this->checkAction('/crm/customer/delete','删除客户')) return;
+        $ids = $this->request->post('ids/a', []);
+        if (empty($ids)) return $this->renderError('请选择客户');
+        $storeId = $this->storeId;
+        $count = \think\facade\Db::name('crm_customer')
+            ->whereIn('id', $ids)->where('store_id', $storeId)
+            ->update(['is_delete' => 1, 'update_time' => time()]);
+        return $this->renderSuccess(['count' => $count], "已删除 {$count} 条");
     }
 }

@@ -8,7 +8,7 @@ class Order extends BaseController
 {
     protected $methodRules = [
         'lists' => 'GET', 'detail' => 'GET',
-        'add' => 'POST', 'edit' => 'POST', 'delete' => 'POST', 'changeStatus' => 'POST',
+        'add' => 'POST', 'edit' => 'POST', 'delete' => 'POST', 'changeStatus' => 'POST', 'generatePeriods' => 'POST',
     ];
 
     protected function getUserId(): int
@@ -58,6 +58,14 @@ class Order extends BaseController
         $result = (new OrderService())->delete($id, $this->getUserId());
         if ($result['success']) return $this->renderSuccess([], '删除成功');
         return $this->renderError($result['error']);
+    }
+
+    public function generatePeriods()
+    {
+        if (!$this->checkAction('/crm/order/edit', '生成期次')) return;
+        $result = (new OrderService())->generatePeriods((int)$this->request->param('order_id', 0), $this->getUserId());
+        if (!$result['success']) return $this->renderError($result['error']);
+        return $this->renderSuccess($result['data'], '已生成期次');
     }
 
     public function changeStatus()

@@ -44,11 +44,8 @@ class FollowUp extends BaseModel
             }
             // AI跟进建议（静默失败不影响主流程）
             try {
-                $aiCfg = \think\facade\Db::name('config')
-                    ->where('config_type', 'crm_setting')
-                    ->where('config_name', 'ai_api_key')
-                    ->value('config_value');
-                if (!empty($aiCfg)) {
+                // 统一走 AiConfig（平台配置/自定义配置/历史 crm_setting 都覆盖，且按租户隔离）
+                if (\app\platform\ai\AiConfig::isConfigured()) {
                     $recent = self::where('customer_id', $data['customer_id'])
                         ->where('is_delete', 0)
                         ->order(['follow_date' => 'desc'])->limit(10)

@@ -19,26 +19,24 @@ class CrmInsight extends Task
     public function handle(array $param)
     {
         ['storeId' => $this->storeId] = $param;
+
+        // 节流：每小时最多执行一次，防止定时器 1s tick 高频空转写爆 binlog
+        // （历史事故：调试期去掉本缓存后，cleanup() 每 tick 跑 ~86400 次/天，9 天写满 9.6G binlog）
         $this->setInterval($this->storeId, $this->taskKey, $this->taskExpire, function () {
             $sid = $this->storeId;
-            Log::info("CrmInsight[{$sid}] started");
 
             try {
                 // 1. 投影刷新
-                $projStats = (new ProjectionService())->refresh($sid);
-                Log::info("CrmInsight[{$sid}] projections: " . implode(', ', $projStats));
+                (new ProjectionService())->refresh($sid);
 
-                // 2. 洞察扫描
-                $insightStats = (new InsightService())->dailyScan($sid);
-                Log::info("CrmInsight[{$sid}] insights: " . json_encode($insightStats, JSON_UNESCAPED_UNICODE));
+                // 2. 洞察扫描（含需求规则扫描）
+                (new InsightService())->dailyScan($sid);
 
                 // 3. 通知生成
-                $notifyCount = (new NotificationService())->generateDigest($sid);
-                Log::info("CrmInsight[{$sid}] notifications: {$notifyCount}");
+                (new NotificationService())->generateDigest($sid);
 
-                // 4. 清理旧通知
-                $cleaned = (new NotificationService())->cleanup();
-                Log::info("CrmInsight[{$sid}] cleaned notifications: {$cleaned}");
+                // 4. 清理旧通知（显式传 storeId：定时进程无请求租户上下文，全局 scope 不生效，必须手动隔离）
+                (new NotificationService())->cleanup($sid);
 
             } catch (\Throwable $e) {
                 Log::error("CrmInsight[{$sid}] ERROR: " . $e->getMessage());

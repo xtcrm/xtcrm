@@ -83,15 +83,25 @@
     <!-- 漏斗 + 趋势 -->
     <div class="wb-charts">
       <div class="chart-card">
-        <div class="chart-title">销售漏斗</div>
-        <div v-if="funnel.length" class="funnel-chart">
-          <div class="funnel-bar" v-for="(s, i) in funnel" :key="i">
-            <div class="funnel-label">{{ s.label }}</div>
-            <div class="funnel-track">
-              <div class="funnel-fill" :style="{ width: Math.max(s.count / maxFunnel * 100, 3) + '%', background: funnelColors[i] }">
-                <span class="funnel-cnt">{{ s.count }}个</span>
-              </div>
-            </div>
+        <div class="chart-title">
+          销售漏斗
+          <span v-if="funnelTotal" class="chart-title-sub">共 {{ funnelTotal }} 个客户</span>
+        </div>
+        <div v-if="funnelTotal" class="funnel-chart">
+          <div
+            v-for="(s, i) in funnelStages"
+            :key="s.stage"
+            class="funnel-row"
+            :class="{ 'is-empty': !s.count }"
+            :title="s.count ? `${s.label}：${s.count} 个${s.conv ? '，较上一阶段 ' + s.conv : ''}（点击查看客户）` : s.label + '：暂无客户'"
+            @click="goFunnelStage(s)"
+          >
+            <div class="funnel-shape" :style="{ clipPath: s.clip, background: s.color }"></div>
+            <span class="funnel-text">
+              <span class="funnel-name">{{ s.label }}</span>
+              <span class="funnel-num">{{ s.count }}</span>
+            </span>
+            <span v-if="i" class="funnel-conv">{{ s.conv }}</span>
           </div>
         </div>
         <div v-else class="chart-empty">暂无漏斗数据</div>
@@ -114,6 +124,24 @@
       <div class="quick-item" v-for="q in quickEntries" :key="q.label" @click="router.push(q.path)">
         <div class="qi-icon"><component :is="q.icon" /></div>
         <div class="qi-label">{{ q.label }}</div>
+      </div>
+    </div>
+
+    <!-- 今日待办：拜访 + 商机 -->
+    <div v-if="todayItems.length" class="wb-follow" style="margin-bottom:16px">
+      <div class="follow-title">今日待办 <span style="font-size:12px;color:#d6893b;font-weight:normal">{{ todayItems.length }} 项</span></div>
+      <div class="follow-list">
+        <div class="follow-item" v-for="(item, i) in todayItems" :key="'td'+i" @click="router.push(item._url)" style="cursor:pointer">
+          <div class="fi-dot" :style="{ background: item._dotColor }" :class="item._dotActive ? 'active' : ''"></div>
+          <div class="fi-body">
+            <div class="fi-head">
+              <strong>{{ item._title }}</strong>
+              <a-tag v-if="item._tag" :color="item._tagColor" size="small" style="margin-left:6px">{{ item._tag }}</a-tag>
+              <span style="color:#999;font-size:12px">{{ item._sub }}</span>
+            </div>
+            <div class="fi-content" style="color:#666">{{ item._desc }}</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -153,7 +181,10 @@ const loading = ref(false)
 const data = reactive({})
 const trendData = ref([])
 
-const funnelColors = ['#e8a85f', '#d6893b', '#c67a2f', '#b87326', '#9e621e']
+// 漏斗各阶段配色：从浅到深，阶段越往后颜色越沉，视觉上自然收口
+const FUNNEL_COLORS = ['#e8a85f', '#de9849', '#d6893b', '#c47a30', '#ab6824']
+// 几何宽度下限：太窄放不下"初步接触 128"，数字失真由右侧百分比补足
+const FUNNEL_MIN_WIDTH = 32
 const WARNING_TYPES = ['followup_overdue', 'pool_warning', 'churn_risk']
 const OPPORTUNITY_TYPES = ['repurchase_window', 'cross_sell', 'dormant']
 
@@ -180,10 +211,76 @@ const quickEntries = [
 ]
 
 const funnel = computed(() => data.funnel || [])
-const maxFunnel = computed(() => Math.max(...funnel.value.map(s => s.count), 1))
+const funnelTotal = computed(() => funnel.value.reduce((n, s) => n + (s.count || 0), 0))
+
+/**
+ * 漏斗图形几何
+ * 每段是"上宽 = 本阶段占比、下宽 = 下一阶段占比"的梯形，拼起来就是连续漏斗；
+ * 右侧给出相对上一阶段的转化率，比单纯比长短更有信息量。
+ */
+const funnelStages = computed(() => {
+  const list = funnel.value
+  if (!list.length) return []
+  const max = Math.max(...list.map(s => s.count || 0), 1)
+  const widthOf = (c) => Math.max((c || 0) / max * 100, FUNNEL_MIN_WIDTH)
+
+  return list.map((s, i) => {
+    const top = widthOf(s.count)
+    const bottom = i < list.length - 1 ? widthOf(list[i + 1].count) : top * 0.9
+    const prev = i > 0 ? (list[i - 1].count || 0) : 0
+    // 上一阶段为 0 时说“0%”没意义，留空
+    const rate = i === 0 || prev === 0 ? null : Math.round((s.count || 0) / prev * 100)
+    return {
+      ...s,
+      color: FUNNEL_COLORS[i] || FUNNEL_COLORS[FUNNEL_COLORS.length - 1],
+      clip: `polygon(${50 - top / 2}% 0, ${50 + top / 2}% 0, ${50 + bottom / 2}% 100%, ${50 - bottom / 2}% 100%)`,
+      conv: rate === null ? '' : rate + '%',
+    }
+  })
+})
+
+// 点某一段 → 客户列表按阶段筛
+function goFunnelStage(s) {
+  if (!s.count) return
+  router.push({ path: '/crm/customer/index', query: { funnel_stage: s.stage } })
+}
+
 const maxTrend = computed(() => Math.max(...trendData.value.map(t => t.amount || 0), 1))
 const attentionInsights = computed(() => (data.insights || []).filter(i => WARNING_TYPES.includes(i.type)))
 const opportunityInsights = computed(() => (data.insights || []).filter(i => OPPORTUNITY_TYPES.includes(i.type)))
+
+// 合并今日拜访 + 商机需求为统一待办列表
+const todayItems = computed(() => {
+  const items = []
+  // 今日拜访
+  const visits = data.todayVisits?.list || []
+  visits.forEach(v => {
+    const time = v.next_follow_date ? new Date(v.next_follow_date * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''
+    items.push({
+      _title: v.customer_name || v.contact_name || '未知',
+      _sub: v.follow_type || '拜访',
+      _desc: (time ? time + ' ' : '') + (v.next_follow_content || ''),
+      _url: v.customer_id ? '/crm/customer/detail?id=' + v.customer_id : '',
+      _dotColor: '#1677ff',
+      _dotActive: true,
+    })
+  })
+  // 商机需求
+  const demands = data.demands || []
+  demands.slice(0, 8).forEach(d => {
+    items.push({
+      _title: d.customer_name,
+      _sub: d.rule_name,
+      _desc: d.reason,
+      _tag: d.priority === 1 ? '高' : d.priority === 2 ? '中' : '低',
+      _tagColor: d.priority === 1 ? 'red' : d.priority === 2 ? 'orange' : 'blue',
+      _url: '/crm/customer/detail?id=' + d.customer_id,
+      _dotColor: '#d6893b',
+      _dotActive: false,
+    })
+  })
+  return items
+})
 
 function formatMoney(v) { return (v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 }) }
 function decodeHtml(html) { if (!html) return ''; return html.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/<[^>]*>/g, '') }
@@ -318,12 +415,30 @@ onMounted(() => { loadData() })
 .chart-title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 18px; text-transform: uppercase; letter-spacing: .5px; }
 .chart-empty { height: 160px; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 13px; }
 
-.funnel-chart { display: flex; flex-direction: column; gap: 10px; }
-.funnel-bar { display: flex; align-items: center; gap: 10px; }
-.funnel-label { font-size: 12px; color: #666; width: 72px; flex-shrink: 0; text-align: right; }
-.funnel-track { flex: 1; height: 28px; background: #f5f5f5; border-radius: 4px; overflow: hidden; }
-.funnel-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; transition: width .5s cubic-bezier(.4,0,.2,1); }
-.funnel-cnt { font-size: 11px; color: #fff; font-weight: 600; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.chart-title-sub { margin-left: 8px; font-size: 11px; color: #bbb; font-weight: 400; letter-spacing: 0; text-transform: none; }
+
+/* 销售漏斗：clip-path 梯形拼成的纵向漏斗，右侧标转化率 */
+.funnel-chart { display: flex; flex-direction: column; gap: 4px; }
+.funnel-row { position: relative; height: 40px; padding-right: 52px; cursor: pointer; }
+.funnel-row.is-empty { cursor: default; }
+.funnel-shape {
+  position: absolute; top: 0; right: 52px; bottom: 0; left: 0;
+  transition: filter .15s, opacity .15s;
+}
+.funnel-row.is-empty .funnel-shape { opacity: .32; }
+.funnel-row:not(.is-empty):hover .funnel-shape { filter: brightness(1.07); }
+.funnel-text {
+  position: absolute; top: 0; bottom: 0; left: 0; right: 52px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: #fff; font-size: 12px; letter-spacing: .5px; pointer-events: none;
+  text-shadow: 0 1px 2px rgba(120, 60, 0, .25);
+}
+.funnel-name { white-space: nowrap; }
+.funnel-num { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.funnel-conv {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: #999; font-variant-numeric: tabular-nums;
+}
 
 .trend-chart { display: flex; align-items: flex-end; gap: 3px; height: 180px; padding: 0 6px; }
 .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }

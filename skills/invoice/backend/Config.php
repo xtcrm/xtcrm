@@ -16,6 +16,8 @@ class Config extends BaseController
         'testOcr'          => 'POST',
         'memberList'       => 'GET',
         'searchMember'     => 'GET',
+        'alertConfig'      => 'GET',
+        'saveAlertConfig'  => 'POST',
     ];
 
     public function smsTemplates()
@@ -182,6 +184,49 @@ class Config extends BaseController
             $member['avatar_url'] = '/uploads/avatar/' . $member['avatar_id'];
         }
         return $this->renderSuccess($member);
+    }
+
+    public function alertConfig()
+    {
+        $rows = Db::name('config')
+            ->where('store_id', $this->storeId)
+            ->where('config_type', 'invoice_alert')
+            ->select()->toArray();
+
+        $cfg = ['tax_burden_min' => 1, 'alert_enabled' => true];
+        foreach ($rows as $r) {
+            if ($r['config_name'] === 'tax_burden_min') $cfg['tax_burden_min'] = floatval($r['config_value']);
+            if ($r['config_name'] === 'alert_enabled') $cfg['alert_enabled'] = $r['config_value'] == '1';
+        }
+        return $this->renderSuccess($cfg);
+    }
+
+    public function saveAlertConfig()
+    {
+        $taxBurdenMin = $this->request->param('tax_burden_min', 1);
+        $alertEnabled = $this->request->param('alert_enabled', true);
+
+        $map = [
+            'tax_burden_min' => (string) $taxBurdenMin,
+            'alert_enabled'   => $alertEnabled ? '1' : '0',
+        ];
+
+        foreach ($map as $cname => $val) {
+            $exist = Db::name('config')
+                ->where('store_id', $this->storeId)
+                ->where('config_type', 'invoice_alert')
+                ->where('config_name', $cname)->find();
+            if ($exist) {
+                Db::name('config')->where('id', $exist['id'])->update(['config_value' => $val, 'update_time' => time()]);
+            } else {
+                Db::name('config')->insert([
+                    'store_id' => $this->storeId, 'config_type' => 'invoice_alert',
+                    'config_name' => $cname, 'config_value' => $val,
+                    'create_time' => time(), 'update_time' => time(),
+                ]);
+            }
+        }
+        return $this->renderSuccess([], '保存成功');
     }
 
     public function testOcr()

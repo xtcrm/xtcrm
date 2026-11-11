@@ -37,7 +37,7 @@ class Invoice extends BaseModel
 
     public function getList(array $where = [], array $param = [])
     {
-        $allowed = ['id', 'company_id', 'member_id', 'invoice_type', 'status', 'invoice_date', 'invoice_number'];
+        $allowed = ['id', 'company_id', 'member_id', 'invoice_type', 'direction', 'status', 'invoice_date', 'invoice_number'];
         $fw = [];
         foreach ($where as $k => $v) {
             if (in_array($k, $allowed) && $v !== '' && $v !== null) {

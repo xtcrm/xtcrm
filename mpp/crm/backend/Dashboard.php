@@ -148,10 +148,28 @@ class Dashboard extends BaseController
         // 扫描日志：今日洞察扫描结果摘要
         $scanLog = $this->buildScanLog($sid);
 
+        // 商机需求（按当前用户权限过滤）
+        $demandQuery = \think\facade\Db::name('crm_demand')
+            ->alias('d')
+            ->join('yoshop_crm_customer c', 'd.customer_id = c.id')
+            ->join('yoshop_crm_demand_rule r', 'd.rule_key = r.rule_key AND r.store_id = ' . $sid, 'LEFT')
+            ->where('d.store_id', $sid)
+            ->where('d.status', 1)
+            ->field('d.id, d.customer_id, d.rule_key, d.reason, d.create_time, c.customer_name, r.rule_name, r.priority')
+            ->order('r.priority', 'asc')->order('d.create_time', 'desc')
+            ->limit(20);
+        if (empty($user['is_super'])) {
+            $demandQuery->where('d.owner_user_id', $userId);
+        }
+        $demands = $demandQuery->select()->toArray();
+
+        // 今日拜访
+        $todayVisits = \mpp\crm\service\FollowUpService::todayVisits($sid, empty($user['is_super']) ? $userId : 0);
+
         return $this->renderSuccess(compact(
             'funnel', 'pendingFollowup', 'newCustomers', 'monthQuotation',
             'monthOrder', 'unpaid', 'poolCount', 'recentFollows', 'insights', 'unreadCount',
-            'kpi', 'ranking', 'scanLog'
+            'kpi', 'ranking', 'scanLog', 'demands', 'todayVisits'
         ));
     }
 

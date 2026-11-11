@@ -52,7 +52,7 @@ service.interceptors.response.use(
     return result
   },
   (error) => {
-    message.error('网络异常，请稍后重试')
+    //message.error('网络异常，请稍后重试')
     return Promise.reject(error)
   },
 )

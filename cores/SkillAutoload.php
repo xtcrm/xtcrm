@@ -25,7 +25,7 @@ class SkillAutoload
 
     public static function boot(): void
     {
-        spl_autoload_register([self::class, 'load'], true, false);
+        spl_autoload_register([self::class, 'load'], true, true);
     }
 
     public function handle(): void

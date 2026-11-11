@@ -2,16 +2,9 @@
   <a-card :bordered="false">
     <a-page-header title="发票详情" @back="() => router.go(-1)">
       <template #extra>
-        <template v-if="detail?.status === 0">
-          <a-button type="primary" @click="auditVisible = true">审核通过</a-button>
-          <a-button danger style="margin-left:8px" @click="rejectVisible = true">驳回</a-button>
-        </template>
-        <template v-if="detail?.status === 1">
-          <a-button type="primary" @click="completeVisible = true">完成开票</a-button>
-        </template>
-        <template v-if="detail?.status === 2">
-          <a-button @click="handleNotify">发送短信通知</a-button>
-        </template>
+        <a-popconfirm v-if="detail?.status === 1" title="确认作废?" @confirm="handleVoid">
+          <a-button danger>作废</a-button>
+        </a-popconfirm>
       </template>
     </a-page-header>
     <a-divider />
@@ -31,11 +24,12 @@
       </a-descriptions>
 
       <!-- 客户原始凭证 -->
-      <div v-if="detail?.ocr_raw_text || ocrImages.length" style="background:#fffbe6;border-radius:8px;padding:16px;margin-top:16px;border:1px solid #ffe58f">
-        <div style="font-weight:600;font-size:14px;margin-bottom:12px;color:#ad6800">📎 客户原始凭证</div>
+      <div v-if="detail?.ocr_raw_text || ocrImages.length || attachUrls.length" style="background:#fffbe6;border-radius:8px;padding:16px;margin-top:16px;border:1px solid #ffe58f">
+        <div style="font-weight:600;font-size:14px;margin-bottom:12px;color:#ad6800">📎 原始凭证</div>
         <div v-if="detail?.ocr_raw_text" style="background:#fff;border-radius:6px;padding:12px;font-size:13px;color:#555;white-space:pre-wrap;max-height:200px;overflow-y:auto;margin-bottom:12px;line-height:1.6">{{ detail.ocr_raw_text }}</div>
-        <div v-if="ocrImages.length" style="display:flex;gap:8px;flex-wrap:wrap">
-          <a-image v-for="(img, i) in ocrImages" :key="i" :src="img" :width="100" :height="100" style="object-fit:cover;border-radius:4px" />
+        <div v-if="ocrImages.length || attachUrls.length" style="display:flex;gap:8px;flex-wrap:wrap">
+          <a-image v-for="(img, i) in ocrImages" :key="'ocr_'+i" :src="img" :width="100" :height="100" style="object-fit:cover;border-radius:4px" />
+          <a-image v-for="(img, i) in attachUrls" :key="'att_'+i" :src="img" :width="100" :height="100" style="object-fit:cover;border-radius:4px" />
         </div>
       </div>
 
@@ -89,9 +83,6 @@
       </template>
     </a-spin>
 
-    <audit-modal v-model:visible="auditVisible" :record="detail" status="1" title="审核通过" @ok="onAudited(1)" />
-    <audit-modal v-model:visible="rejectVisible" :record="detail" status="4" title="驳回申请" @ok="onAudited(4)" />
-    <complete-modal v-model:visible="completeVisible" :record="detail" @ok="onCompleted" />
   </a-card>
 </template>
 
@@ -99,19 +90,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getInvoiceDetail, notifyInvoice } from '../api'
-import AuditModal from './components/AuditModal.vue'
-import CompleteModal from './components/CompleteModal.vue'
+import { getInvoiceDetail, voidInvoice } from '../api'
 
 const router = useRouter()
 const route = useRoute()
 const detail = ref(null)
 const loading = ref(false)
-const auditVisible = ref(false)
-const rejectVisible = ref(false)
-const completeVisible = ref(false)
-
 const ocrImages = ref([])
+const attachUrls = ref([])
 const goodsList = ref([])
 const goodsColumns = [
   { title: '名称', dataIndex: 'name' },
@@ -135,13 +121,14 @@ function load() {
     if (d?.ocr_images) {
       try { ocrImages.value = typeof d.ocr_images === 'string' ? JSON.parse(d.ocr_images) : d.ocr_images } catch (e) { ocrImages.value = [] }
     }
+    if (d?.attach_urls) {
+      try { attachUrls.value = typeof d.attach_urls === 'string' ? JSON.parse(d.attach_urls) : d.attach_urls } catch (e) { attachUrls.value = [] }
+    }
   }).finally(() => { loading.value = false })
 }
-function handleNotify() {
-  notifyInvoice(detail.value.id).then(() => message.success('短信已发送'))
+function handleVoid() {
+  voidInvoice(detail.value.id).then(() => { message.success('已作废'); load() })
 }
-function onAudited() { auditVisible.value = false; rejectVisible.value = false; load() }
-function onCompleted() { completeVisible.value = false; load() }
 
 onMounted(load)
 </script>

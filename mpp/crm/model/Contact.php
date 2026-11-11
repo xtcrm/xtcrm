@@ -35,6 +35,19 @@ class Contact extends BaseModel
             $query->where(function ($q) use ($kw) {
                 $q->where('ct.contact_name', 'like', "%{$kw}%")
                   ->whereOr('ct.mobile', 'like', "%{$kw}%");
+                // 关联公司名匹配
+                $customerIds = \think\facade\Db::name('crm_customer')
+                    ->where('customer_name', 'like', "%{$kw}%")
+                    ->where('is_delete', 0)
+                    ->column('id');
+                if (!empty($customerIds)) {
+                    $contactIds = \think\facade\Db::name('crm_contact_customer')
+                        ->whereIn('customer_id', $customerIds)
+                        ->column('contact_id');
+                    if (!empty($contactIds)) {
+                        $q->whereOr('ct.id', 'in', array_unique($contactIds));
+                    }
+                }
             });
         }
 

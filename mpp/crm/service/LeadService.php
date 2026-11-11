@@ -3,6 +3,7 @@ namespace mpp\crm\service;
 
 use app\platform\BaseService;
 use mpp\crm\model\Lead as LeadModel;
+use mpp\crm\service\OperationLogService;
 
 class LeadService extends BaseService
 {
@@ -28,6 +29,7 @@ class LeadService extends BaseService
             EventService::record('customer_created', 'lead', $model->id, [
                 'lead_name' => $data['lead_name'] ?? '', 'owner_id' => $actorUserId,
             ], $actorUserId);
+            OperationLogService::logAdd('线索', $model->id, $data['lead_name'] ?? '');
             return ['success' => true, 'data' => ['id' => $model->id], 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '添加失败'];
@@ -39,6 +41,7 @@ class LeadService extends BaseService
         $detail = $model->detail($id);
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '线索不存在'];
         if ($detail->edit($data)) {
+            OperationLogService::logEdit('线索', $id, $data['lead_name'] ?? ($detail['lead_name'] ?? ''), $data);
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $detail->getError() ?: '更新失败'];
@@ -50,6 +53,7 @@ class LeadService extends BaseService
         $detail = $model->detail($id);
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '线索不存在'];
         if ($detail->setDelete($id)) {
+            OperationLogService::logDelete('线索', $id, $detail['lead_name'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $detail->getError() ?: '删除失败'];
@@ -65,6 +69,7 @@ class LeadService extends BaseService
                 'customer_id' => $result['customer_id'],
                 'customer_name' => $result['customer_name'],
             ], $actorUserId);
+            OperationLogService::log('convert', '线索', $id, "线索转化客户「{$result['customer_name']}」");
             EventService::record('customer_created', 'customer', $result['customer_id'], [
                 'from_lead_id' => $id,
                 'customer_name' => $result['customer_name'],

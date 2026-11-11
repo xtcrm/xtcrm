@@ -1,34 +1,16 @@
 <template>
   <a-card :bordered="false">
-    <div class="table-operator">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;gap:10px;align-items:center">
+        <a-input-search v-model:value="queryParam.keyword" placeholder="搜索线索/公司/联系人/电话" style="width:260px" allow-clear @search="loadData(true)" />
+        <a-select v-model:value="queryParam.status" placeholder="状态" allow-clear style="width:110px" @change="loadData(true)">
+          <a-select-option value="">全部</a-select-option>
+          <a-select-option :value="1">跟进中</a-select-option>
+          <a-select-option :value="2">已转化</a-select-option>
+          <a-select-option :value="3">已放弃</a-select-option>
+        </a-select>
+      </div>
       <a-button type="primary" @click="handleAdd"><plus-outlined /> 新增线索</a-button>
-    </div>
-
-    <div class="table-page-search-wrapper">
-      <a-form layout="inline">
-        <a-row :gutter="24">
-          <a-col :md="8">
-            <a-form-item label="线索名称">
-              <a-input v-model:value="queryParam.lead_name" allow-clear />
-            </a-form-item>
-          </a-col>
-          <a-col :md="8">
-            <a-form-item label="状态">
-              <a-select v-model:value="queryParam.status" allow-clear placeholder="全部">
-                <a-select-option value="">全部</a-select-option>
-                <a-select-option :value="1">新建</a-select-option>
-                <a-select-option :value="2">跟进中</a-select-option>
-                <a-select-option :value="3">已转客户</a-select-option>
-                <a-select-option :value="4">已关闭</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :md="8">
-            <a-button type="primary" @click="loadData(true)">查询</a-button>
-            <a-button style="margin-left:8px" @click="resetSearch">重置</a-button>
-          </a-col>
-        </a-row>
-      </a-form>
     </div>
 
     <a-table :columns="columns" :data-source="dataSource" :loading="loading" :pagination="pagination"
@@ -38,10 +20,10 @@
           <a @click="handleDetail(record)">{{ record.lead_name }}</a>
         </template>
         <template v-else-if="column.key === 'priority'">
-          <a-tag :color="record.priority === 3 ? 'red' : record.priority === 2 ? 'orange' : ''">{{ { 1: '低', 2: '中', 3: '高' }[record.priority] }}</a-tag>
+          <a-tag :color="record.priority === 1 ? 'red' : record.priority === 2 ? 'orange' : ''">{{ { 1: '高', 2: '中', 3: '低' }[record.priority] }}</a-tag>
         </template>
         <template v-else-if="column.key === 'status'">
-          <a-tag :color="record.status === 3 ? 'green' : record.status === 4 ? 'default' : 'blue'">{{ { 1: '新建', 2: '跟进中', 3: '已转客户', 4: '已关闭' }[record.status] }}</a-tag>
+          <a-tag :color="record.status === 2 ? 'green' : record.status === 3 ? 'default' : 'blue'">{{ { 1: '跟进中', 2: '已转化', 3: '已放弃' }[record.status] }}</a-tag>
         </template>
         <template v-else-if="column.key === 'action'">
           <a @click="handleDetail(record)">详情</a>

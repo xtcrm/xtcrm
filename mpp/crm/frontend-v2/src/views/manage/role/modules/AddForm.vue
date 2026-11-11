@@ -90,6 +90,6 @@ async function handleSubmit() {
   } finally { loading.value = false }
 }
 
-function handleCancel() { visible.value = false; formRef.value?.resetFields(); checked.value = [] }
+function handleCancel() { visible.value = false; formRef.value?.resetFields(); checkedKeys.value = []; checkedRaw.value = [] }
 defineExpose({ open })
 </script>

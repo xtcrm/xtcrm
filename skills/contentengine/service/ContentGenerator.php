@@ -2,6 +2,7 @@
 namespace skills\contentengine\service;
 
 use think\facade\Db;
+use app\platform\ai\AiGateway;
 use skills\contentengine\model\CompanyProfile;
 use skills\contentengine\model\Solution;
 
@@ -10,48 +11,16 @@ use skills\contentengine\model\Solution;
  */
 class ContentGenerator
 {
-    /** 调用DeepSeek API，根据格式调整token量 */
-    private function callAi(string $systemPrompt, string $userPrompt, int $maxTokens = 2000): ?string
+    /** 调用全局 AI 配置（设置 → AI 配置），按租户隔离 */
+    private function callAi(string $systemPrompt, string $userPrompt, int $maxTokens, int $storeId): ?string
     {
-        $rows = Db::name('config')
-            ->where('config_type', 'crm_setting')
-            ->whereIn('config_name', ['ai_api_url', 'ai_api_key', 'ai_model'])
-            ->select()->toArray();
-        $cfg = ['api_url' => 'https://api.deepseek.com/chat/completions', 'api_key' => '', 'model' => 'deepseek-chat'];
-        foreach ($rows as $r) {
-            if ($r['config_name'] === 'ai_api_url' && $r['config_value']) {
-                $url = $r['config_value'];
-                if (!str_contains($url, '/chat/completions')) $url = rtrim($url, '/') . '/v1/chat/completions';
-                $cfg['api_url'] = $url;
-            }
-            if ($r['config_name'] === 'ai_api_key') $cfg['api_key'] = $r['config_value'];
-            if ($r['config_name'] === 'ai_model' && $r['config_value']) $cfg['model'] = $r['config_value'];
-        }
-        if (empty($cfg['api_key'])) return null;
+        $resp = AiGateway::request($systemPrompt, $userPrompt, [
+            'temperature' => 0.7,
+            'max_tokens'  => $maxTokens,
+            'timeout'     => 120,
+        ], $storeId);
 
-        $ch = curl_init($cfg['api_url']);
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode([
-                'model' => $cfg['model'],
-                'messages' => [
-                    ['role' => 'system', 'content' => $systemPrompt],
-                    ['role' => 'user', 'content' => $userPrompt],
-                ],
-                'temperature' => 0.7,
-                'max_tokens' => $maxTokens,
-            ], JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $cfg['api_key']],
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 120, CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => false,
-        ]);
-        $resp = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($code !== 200) return null;
-        $body = json_decode($resp, true);
-        return trim($body['choices'][0]['message']['content'] ?? '') ?: null;
+        return $resp->success ? (trim((string)$resp->content) ?: null) : null;
     }
     /**
      * 根据选题ID生成四格式内容
@@ -129,7 +98,7 @@ class ContentGenerator
             $prompt = $this->buildPrompt($format, $topic, $profile, $keywords, $solution, $maxLen);
             $tokenMap = ['long' => 4096, 'video' => 2048, 'social' => 1024, 'seo' => 512];
             $maxTokens = $tokenMap[$format] ?? 2000;
-            $content = $this->callAi($systemPrompt, $prompt, $maxTokens);
+            $content = $this->callAi($systemPrompt, $prompt, $maxTokens, $storeId);
             if ($content === null) $content = '';
             // 剔除4字节emoji（MySQL utf8连接不支持）
             $content = preg_replace('/[\xF0-\xF7][\x80-\xBF][\x80-\xBF][\x80-\xBF]/', '', $content);

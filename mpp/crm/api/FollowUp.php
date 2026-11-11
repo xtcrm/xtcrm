@@ -45,7 +45,7 @@ class FollowUp extends Base
     /** 今日拜访 */
     public function todayVisits()
     {
-        $userId = intval($this->request->param('user_id', 0));
+        $userId = $this->resolveUserId(intval($this->request->param('user_id', 0)));
         return $this->renderSuccess(FollowUpService::todayVisits($this->storeId, $userId));
     }
 
@@ -54,7 +54,7 @@ class FollowUp extends Base
     {
         $start  = $this->request->param('start', '');
         $end    = $this->request->param('end', '');
-        $userId = intval($this->request->param('user_id', 0));
+        $userId = $this->resolveUserId(intval($this->request->param('user_id', 0)));
         return $this->renderSuccess(FollowUpService::weekVisits($this->storeId, $start, $end, $userId));
     }
 
@@ -63,8 +63,21 @@ class FollowUp extends Base
     {
         $start  = $this->request->param('start', '');
         $end    = $this->request->param('end', '');
-        $userId = intval($this->request->param('user_id', 0));
+        $userId = $this->resolveUserId(intval($this->request->param('user_id', 0)));
         return $this->renderSuccess(FollowUpService::calendarEvents($this->storeId, $start, $end, $userId));
+    }
+
+    /**
+     * 解析 userId：显式传参优先；非超管自动限制为当前用户
+     * 超管传 0 = 看全部，非超管强制限制为本人
+     */
+    private function resolveUserId(int $explicitUserId): int
+    {
+        if ($explicitUserId > 0) return $explicitUserId;
+        if (empty($this->store['is_super']) && ($this->store['role_id'] ?? 0) !== 1) {
+            return $this->userId;
+        }
+        return 0;
     }
 
     /** AI 祝福语 */

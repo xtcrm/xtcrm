@@ -6,8 +6,8 @@ namespace mpp\crm\api;
 use app\common\library\storage\Driver as StorageDriver;
 use app\common\enum\Setting as SettingEnum;
 use app\common\enum\file\FileType as FileTypeEnum;
-use app\store\model\Setting as SettingModel;
-use app\store\model\UploadFile as UploadFileModel;
+use app\common\model\store\Setting as SettingModel;
+use app\platform\model\UploadFile as UploadFileModel;
 
 /**
  * 移动端文件上传

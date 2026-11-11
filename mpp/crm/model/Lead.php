@@ -12,11 +12,22 @@ class Lead extends BaseModel
     
     public function getList($where = [], $param = [])
     {
-        $allowed = ['id','lead_name','status','priority','source','owner_user_id','is_delete','company_name','contact_person','contact_phone','contact_position','industry','expected_amount','requirement','remark','next_follow_date','create_time','customer_id'];
+        $allowed = ['id','lead_name','status','priority','source','owner_user_id','customer_id','company_name','contact_person','contact_phone','contact_position','industry','expected_amount','requirement','remark','next_follow_date','create_time'];
+        unset($where['s'], $where['page'], $where['limit']);
         $fw = [];
-        foreach ($where as $k => $v) { if (in_array($k, $allowed)) $fw[$k] = $v; }
-        if (!empty($where['lead_name'])) $fw[] = ['lead_name','like','%'.$where['lead_name'].'%'];
-        return $this->where($fw)->where('is_delete',0)->order(['id'=>'desc'])->paginate($param);
+        foreach ($where as $k => $v) {
+            if (in_array($k, $allowed) && $v !== '' && $v !== null) $fw[$k] = $v;
+        }
+        $kw = $where['keyword'] ?? $where['lead_name'] ?? '';
+        if (!empty($kw)) {
+            $fw[] = function ($q) use ($kw) {
+                $q->where('lead_name', 'like', "%{$kw}%")
+                  ->whereOr('company_name', 'like', "%{$kw}%")
+                  ->whereOr('contact_person', 'like', "%{$kw}%")
+                  ->whereOr('contact_phone', 'like', "%{$kw}%");
+            };
+        }
+        return $this->where($fw)->where('is_delete', 0)->order(['id' => 'desc'])->paginate($param);
     }
 
     public function getOwnerUserNameAttr($v, $data) {

@@ -61,6 +61,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeftOutlined } from '@ant-design/icons-vue'
 import { getDetail } from '@/api/crm/contact'
 import dayjs from 'dayjs'
+import { useTabsStore, tabKeyOf } from '@/stores/tabs'
 
 function formatTime(v) {
   if (!v) return ''
@@ -70,6 +71,7 @@ function formatTime(v) {
 
 const route = useRoute()
 const router = useRouter()
+const tabsStore = useTabsStore()
 const loading = ref(false)
 const contact = ref(null)
 const companies = ref([])
@@ -88,11 +90,14 @@ const allFollowups = computed(() => {
 function loadDetail() {
   const id = route.query.id
   if (!id) return
+  // 捕获页签 key：本页被 keep-alive 缓存，异步响应回来时 route 可能已变
+  const tabKey = tabKeyOf(route)
   loading.value = true
   getDetail(id).then(res => {
     const d = res?.data || res
     contact.value = d?.contact
     companies.value = d?.companies || []
+    tabsStore.setTitle(tabKey, contact.value?.contact_name)
   }).finally(() => { loading.value = false })
 }
 

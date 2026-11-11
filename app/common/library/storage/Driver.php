@@ -134,6 +134,6 @@ class Driver
             throw new Exception("未找到存储引擎类: {$storage}");
         }
         $class = self::ENGINE_CLASS_LIST[$storage];
-        return new $class($storage, $this->config['engine'][$storage]);
+        return new $class($storage, $this->config['engine'][$storage] ?? null);
     }
 }
