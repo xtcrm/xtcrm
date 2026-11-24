@@ -71,7 +71,17 @@ class QuotationService extends BaseService
                 'amount' => $data['final_amount'] ?? $data['total_amount'] ?? 0,
                 'currency' => $data['currency'] ?? 'CNY',
             ], $actorUserId, (int)($data['project_id'] ?? 0));
-            OperationLogService::logAdd('报价单', $model->id, $data['quotation_no'] ?? ('Q-' . $model->id));
+            $quotationNo = $data['quotation_no'] ?? ('Q-' . $model->id);
+            CustomerLogService::record(
+                (int)($data['customer_id'] ?? 0),
+                'quotation_created',
+                "新建报价单 {$quotationNo}",
+                ['quotation_id' => $model->id, 'no' => $quotationNo, 'amount' => $data['final_amount'] ?? $data['total_amount'] ?? 0],
+                $actorUserId,
+                $this->storeId,
+                (int)($data['project_id'] ?? 0)
+            );
+            OperationLogService::logAdd('报价单', $model->id, $quotationNo);
             return ['success' => true, 'data' => ['id' => $model->id], 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '添加失败'];
@@ -98,6 +108,14 @@ class QuotationService extends BaseService
             EventService::record('quotation_rejected', 'quotation', $id, [
                 'customer_id' => $detail['customer_id'] ?? 0, 'deleted' => true,
             ], $actorUserId);
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'quotation_deleted',
+                '删除报价单 ' . ($detail['quotation_no'] ?? ''),
+                ['quotation_id' => $id],
+                $actorUserId,
+                $this->storeId
+            );
             OperationLogService::logDelete('报价单', $id, $detail['quotation_no'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }
@@ -120,6 +138,16 @@ class QuotationService extends BaseService
             ];
             $eventType = $eventMap[$status] ?? null;
             if ($eventType) {
+                $statusNames = [2 => '已发送', 3 => '已确认', 4 => '已拒绝', 5 => '已转订单'];
+                CustomerLogService::record(
+                    (int)($detail['customer_id'] ?? 0),
+                    $eventType,
+                    '报价单 ' . ($detail['quotation_no'] ?? '') . '：' . ($statusNames[$status] ?? ('状态' . $status)),
+                    ['quotation_id' => $id, 'from_status' => $oldStatus, 'to_status' => $status],
+                    $actorUserId,
+                    $this->storeId,
+                    (int)($detail['project_id'] ?? 0)
+                );
                 EventService::record($eventType, 'quotation', $id, [
                     'customer_id' => $detail['customer_id'] ?? 0,
                     'amount' => $detail['final_amount'] ?? 0,

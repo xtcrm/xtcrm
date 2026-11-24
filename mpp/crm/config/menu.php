@@ -33,6 +33,8 @@ return [
         'sort'     => 20,
         'children' => [
             ['name' => '客户列表',   'path' => '/crm/customer/index'],
+            ['name' => '客户转让',   'path' => '/crm/customer/transfer'],
+            ['name' => '客服单',     'path' => '/crm/service/ticket'],
             ['name' => '公海池',     'path' => '/crm/customer/pool'],
             ['name' => '协作客户',   'path' => '/crm/customer/collab'],
             ['name' => '新增客户',   'path' => '/crm/customer/create'],

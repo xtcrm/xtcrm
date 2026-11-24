@@ -58,6 +58,52 @@
       </div>
     </div>
 
+    <!-- 我的流程 -->
+    <div v-if="flowVisible" class="wb-flow">
+      <div class="flow-card">
+        <div class="flow-head">
+          <div class="flow-title">
+            我的流程待办
+            <a-badge v-if="flowStats.pending" :count="flowStats.pending" :overflow-count="99" />
+            <a-tag v-if="flowStats.overdue" color="red">超时 {{ flowStats.overdue }}</a-tag>
+          </div>
+          <a @click="router.push('/index/flow/task')">全部待办 →</a>
+        </div>
+        <div v-if="flowTasks.length" class="flow-list">
+          <div v-for="t in flowTasks" :key="t.id" class="flow-item" @click="openFlowTask(t)">
+            <div class="fi-dot" :class="{ overdue: t.overdue }"></div>
+            <div class="fi-body">
+              <div class="fi-title">{{ t.instance?.title || t.node_name }}</div>
+              <div class="fi-sub">{{ t.node_name }} · {{ t.instance?.biz_label }} · {{ t.due_at_text || '无截止' }}</div>
+            </div>
+            <a-tag :color="t.overdue ? 'red' : 'blue'" size="small">{{ t.overdue ? '超时' : t.status_text }}</a-tag>
+          </div>
+        </div>
+        <div v-else class="flow-empty">暂无待办</div>
+      </div>
+
+      <div class="flow-card">
+        <div class="flow-head">
+          <div class="flow-title">
+            我发起的流程
+            <a-tag v-if="flowStats.running" color="processing">进行中 {{ flowStats.running }}</a-tag>
+          </div>
+          <a @click="router.push('/index/flow/instance')">全部流程 →</a>
+        </div>
+        <div v-if="flowInstances.length" class="flow-list">
+          <div v-for="it in flowInstances" :key="it.id" class="flow-item" @click="openFlowInstance(it)">
+            <div class="fi-dot running"></div>
+            <div class="fi-body">
+              <div class="fi-title">{{ it.title || it.biz_label }}</div>
+              <div class="fi-sub">{{ it.template_name }} · {{ it.started_at_text }}</div>
+            </div>
+            <a-tag color="blue" size="small">{{ it.status_text }}</a-tag>
+          </div>
+        </div>
+        <div v-else class="flow-empty">暂无进行中的流程</div>
+      </div>
+    </div>
+
     <!-- 核心指标卡 -->
     <div class="wb-metrics">
       <div class="metric-card">
@@ -167,14 +213,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { TeamOutlined, FileTextOutlined, RiseOutlined, PlusCircleOutlined, UsergroupAddOutlined, BulbOutlined, BookOutlined, BarChartOutlined, FileAddOutlined } from '@ant-design/icons-vue'
+import { TeamOutlined, FileTextOutlined, RiseOutlined, PlusCircleOutlined, UsergroupAddOutlined, BulbOutlined, BookOutlined, BarChartOutlined, FileAddOutlined, CheckSquareOutlined, ApartmentOutlined } from '@ant-design/icons-vue'
 import { getIndex } from '@/api/crm/dashboard'
 import { dismissInsight } from '@/api/crm/insight'
 import { acceptSuggestion as acceptSuggestionApi, rejectSuggestion as rejectSuggestionApi } from '@/api/crm/suggestion'
 import { getProjection } from '@/api/crm/projection'
+import { getTaskList, getTaskCount, getInstanceList } from '@platform/flow/views-v2/api'
 
 const router = useRouter()
 const loading = ref(false)
@@ -208,6 +255,8 @@ const quickEntries = [
   { label: '线索管理', path: '/crm/lead/index', icon: BulbOutlined },
   { label: '知识库', path: '/crm/knowledge/index', icon: BookOutlined },
   { label: '内容效果', path: '/crm/content/analytics', icon: BarChartOutlined },
+  { label: '我的待办', path: '/index/flow/task', icon: CheckSquareOutlined },
+  { label: '我的流程', path: '/index/flow/instance', icon: ApartmentOutlined },
 ]
 
 const funnel = computed(() => data.funnel || [])
@@ -340,7 +389,53 @@ function handleInsightAction(item) {
   router.push({ path, query })
 }
 
-onMounted(() => { loadData() })
+// ===== 我的流程 =====
+const flowVisible = ref(false)
+const flowTasks = ref([])
+const flowInstances = ref([])
+const flowStats = reactive({ pending: 0, overdue: 0, running: 0 })
+
+async function loadFlow() {
+  // 三个接口互不影响，任一成功就展示流程区域
+  const [countRes, taskRes, instRes] = await Promise.allSettled([
+    getTaskCount(),
+    getTaskList({ scope: 'pending', page: 1, limit: 5 }),
+    getInstanceList({ mine: 1, status: 'running', page: 1, limit: 5 }),
+  ])
+
+  let anyOk = false
+  if (countRes.status === 'fulfilled' && countRes.value?.status === 200) {
+    Object.assign(flowStats, countRes.value.data || {})
+    anyOk = true
+  }
+  if (taskRes.status === 'fulfilled' && taskRes.value?.status === 200) {
+    flowTasks.value = taskRes.value.data?.list || []
+    anyOk = true
+  }
+  if (instRes.status === 'fulfilled' && instRes.value?.status === 200) {
+    flowInstances.value = instRes.value.data?.list || []
+    flowStats.running = instRes.value.data?.total || 0
+    anyOk = true
+  }
+  flowVisible.value = anyOk
+}
+
+function openFlowTask(task) {
+  router.push({ path: '/index/flow/task', query: { focus: task.id } })
+}
+function openFlowInstance(instance) {
+  router.push({ path: '/index/flow/instance', query: { focus: instance.id } })
+}
+
+onMounted(() => {
+  loadData()
+  loadFlow()
+})
+
+// 工作台是 keep-alive 页面，从待办返回时刷新流程数据
+onActivated(() => {
+  loadFlow()
+})
 </script>
 
 <style scoped>
@@ -472,4 +567,21 @@ onMounted(() => { loadData() })
 .fi-user { color: #999; font-size: 12px; }
 .fi-time { color: #ccc; font-size: 11px; margin-left: auto; flex-shrink: 0; }
 .fi-content { font-size: 12px; color: #999; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== 我的流程 ===== */
+.wb-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.flow-card { background: #fff; border: 1px solid #eef1f5; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.flow-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.flow-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.flow-list { display: flex; flex-direction: column; }
+.flow-item { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-radius: 6px; cursor: pointer; }
+.flow-item:hover { background: #f7faff; }
+.fi-dot { width: 8px; height: 8px; border-radius: 50%; background: #1677ff; flex: none; }
+.fi-dot.overdue { background: #ff4d4f; }
+.fi-dot.running { background: #fa8c16; }
+.fi-body { flex: 1; min-width: 0; }
+.fi-title { font-size: 13px; color: #1f2937; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fi-sub { font-size: 11px; color: #8a949e; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-empty { color: #a0aab4; font-size: 12px; padding: 18px 6px; text-align: center; }
+@media (max-width: 1100px) { .wb-flow { grid-template-columns: 1fr; } }
 </style>

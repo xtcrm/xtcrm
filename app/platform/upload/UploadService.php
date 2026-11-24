@@ -34,10 +34,11 @@ class UploadService
      * @param \think\File $file
      * @param int         $storeId  租户 ID
      * @param int         $groupId  文件分组 ID
+     * @param string      $field    上传字段名（默认 iFile；开放平台用 file）
      * @return array
      * @throws \think\Exception
      */
-    public static function upload(\think\File $file, int $storeId = 0, int $groupId = 0): array
+    public static function upload(\think\File $file, int $storeId = 0, int $groupId = 0, string $field = 'iFile'): array
     {
         // 1. 读取存储配置
         $config = self::getStorageConfig($storeId);
@@ -55,7 +56,7 @@ class UploadService
         $storage = new StorageDriver($config);
         // 按租户分目录，与 mpp/crm/service/DocumentService 的落盘位置保持一致。
         // 注意 setUploadFile() 返回的是存储引擎，setRootDirName 必须链在它后面，不能打在 $storage 上。
-        $storage->setUploadFile('iFile')->setRootDirName((string)$storeId);
+        $storage->setUploadFile($field)->setRootDirName((string)$storeId);
 
         if (!$storage->upload()) {
             throw new \think\Exception($storage->getError() ?: '文件上传失败');

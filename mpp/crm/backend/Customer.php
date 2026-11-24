@@ -7,10 +7,10 @@ use mpp\crm\service\CustomerService;
 class Customer extends BaseController
 {
     protected $methodRules = [
-        'lists' => 'GET', 'select' => 'GET', 'detail' => 'GET',
+        'lists' => 'GET', 'select' => 'GET', 'detail' => 'GET', 'records' => 'GET',
         'poolLists' => 'GET', 'collabLists' => 'GET', 'checkName' => 'GET',
         'add' => 'POST', 'edit' => 'POST', 'delete' => 'POST',
-        'batchUpdate' => 'POST', 'batchDelete' => 'POST',
+        'batchUpdate' => 'POST', 'batchDelete' => 'POST', 'batchTransfer' => 'POST', 'transferByOwner' => 'POST',
         'claim' => 'POST', 'release' => 'POST', 'changeStatus' => 'POST',
         'analyze' => 'POST', 'portrait' => 'POST', 'smartSearch' => 'POST',
         'assignLists' => 'GET', 'assignCs' => 'POST', 'claimCs' => 'POST', 'setCs' => 'POST',
@@ -227,5 +227,68 @@ class Customer extends BaseController
             ->whereIn('id', $ids)->where('store_id', $storeId)
             ->update(['is_delete' => 1, 'update_time' => time()]);
         return $this->renderSuccess(['count' => $count], "已删除 {$count} 条");
+    }
+
+    /**
+     * 批量转让客户负责人
+     * POST /crm.customer/batchTransfer
+     */
+    public function batchTransfer()
+    {
+        if (!$this->checkAction('/crm/customer/batchTransfer', '批量转让客户')) return;
+        $data = $this->postData();
+        $ids = $data['ids'] ?? [];
+        if (is_string($ids)) $ids = explode(',', $ids);
+        if (!is_array($ids)) $ids = [];
+        $result = (new CustomerService())->batchTransfer(
+            $ids,
+            (int)($data['to_user_id'] ?? 0),
+            (string)($data['remark'] ?? ''),
+            $this->getUserId()
+        );
+        if (!$result['success']) return $this->renderError($result['error']);
+        $d = $result['data'];
+        $msg = "已转让 {$d['count']} 个客户给「{$d['to_user_name']}」";
+        if (!empty($d['unchanged'])) $msg .= "，跳过 {$d['unchanged']} 个已归属的";
+        if (!empty($d['forbidden'])) $msg .= "，{$d['forbidden']} 个不在数据范围内";
+        if (!empty($d['missing']))   $msg .= "，{$d['missing']} 个不存在或已删除";
+        return $this->renderSuccess($d, $msg);
+    }
+
+    /**
+     * 按原负责人整体转让（该负责人名下全部客户）
+     * POST /crm.customer/transferByOwner
+     */
+    public function transferByOwner()
+    {
+        if (!$this->checkAction('/crm/customer/batchTransfer', '批量转让客户')) return;
+        $data = $this->postData();
+        $result = (new CustomerService())->transferByOwner(
+            (int)($data['from_user_id'] ?? 0),
+            (int)($data['to_user_id'] ?? 0),
+            (string)($data['remark'] ?? ''),
+            $this->getUserId()
+        );
+        if (!$result['success']) return $this->renderError($result['error']);
+        $d = $result['data'];
+        $msg = "已把 {$d['count']} 个客户整体转让给「{$d['to_user_name']}」";
+        if (!empty($d['unchanged'])) $msg .= "，跳过 {$d['unchanged']} 个已归属的";
+        return $this->renderSuccess($d, $msg);
+    }
+
+    /**
+     * 客户日志（详情页时间线）
+     * GET /crm.customer/records
+     */
+    public function records()
+    {
+        if (!$this->checkAction('/crm/customer/detail', '客户详情')) return;
+        $id = (int)$this->request->param('id', 0);
+        $page = (int)$this->request->param('page', 1);
+        $limit = (int)$this->request->param('limit', 20);
+        $category = (string)$this->request->param('category', '');
+        $result = (new CustomerService())->getRecords($id, $page, $limit, $category);
+        if (!$result['success']) return $this->renderError($result['error']);
+        return $this->renderSuccess($result['data']);
     }
 }

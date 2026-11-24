@@ -534,6 +534,33 @@
         </a-table>
         <a-empty v-if="documents.length === 0 && !documentsLoading" description="暂无文件" style="padding:24px" />
       </a-tab-pane>
+      <a-tab-pane key="service" tab="客服单">
+        <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+          <a-button type="primary" size="small" @click="goCreateServiceTicket">
+            <plus-outlined /> 新建客服单
+          </a-button>
+          <span class="muted">建单、指派、状态变更都会进入客户日志</span>
+        </div>
+        <a-table :data-source="serviceTickets" :pagination="false" row-key="id" :loading="serviceTicketsLoading" size="small">
+          <a-table-column title="单号" key="ticket_no" width="170">
+            <template #default="{ record }">
+              <a @click="router.push({ path: '/crm/service/ticket', query: { id: record.id } })">{{ record.ticket_no }}</a>
+            </template>
+          </a-table-column>
+          <a-table-column title="标题" dataIndex="title" key="title" ellipsis />
+          <a-table-column title="类型" dataIndex="category_text" key="category_text" width="80" />
+          <a-table-column title="处理人" dataIndex="assignee_name" key="assignee_name" width="100" />
+          <a-table-column title="状态" key="status" width="90">
+            <template #default="{ record }">
+              <a-tag :color="serviceStatusColor(record.status)">{{ record.status_text }}</a-tag>
+            </template>
+          </a-table-column>
+          <a-table-column title="创建时间" key="create_time" width="120">
+            <template #default="{ record }">{{ record.create_time ? new Date(record.create_time * 1000).toLocaleDateString() : '' }}</template>
+          </a-table-column>
+        </a-table>
+        <a-empty v-if="serviceTickets.length === 0 && !serviceTicketsLoading" description="暂无客服单" style="padding:24px" />
+      </a-tab-pane>
       <a-tab-pane key="workorders" tab="工单">
         <div style="margin-bottom:12px">
           <a-button type="primary" size="small" @click="router.push({ path: '/app/workorder/list' })">
@@ -561,6 +588,53 @@
           </a-table-column>
         </a-table>
         <a-empty v-if="workOrders.length === 0 && !workOrdersLoading" description="暂无工单" style="padding:24px" />
+      </a-tab-pane>
+      <a-tab-pane key="records" tab="客户日志">
+        <div class="records-filter">
+          <a-select
+            v-model:value="recordsCategory"
+            placeholder="全部类型"
+            allow-clear
+            size="small"
+            style="width: 130px"
+            @change="onRecordsCategoryChange"
+          >
+            <a-select-option value="sales">销售</a-select-option>
+            <a-select-option value="service">服务</a-select-option>
+            <a-select-option value="aftersales">售后</a-select-option>
+            <a-select-option value="tech">技术</a-select-option>
+            <a-select-option value="finance">财务</a-select-option>
+            <a-select-option value="presales">售前</a-select-option>
+            <a-select-option value="delivery">交付</a-select-option>
+            <a-select-option value="marketing">营销</a-select-option>
+            <a-select-option value="system">系统</a-select-option>
+          </a-select>
+        </div>
+        <a-timeline :pending="recordsLoading">
+          <a-timeline-item v-for="r in records" :key="r.key" :color="recordColor(r)">
+            <p style="margin-bottom:2px">
+              <a-tag v-if="r.category_label" class="record-category">{{ r.category_label }}</a-tag>
+              <strong>{{ r.title }}</strong>
+              <span style="color:#999;margin-left:8px">{{ r.time_text }}</span>
+            </p>
+            <p style="color:#666;margin:0">操作人：{{ r.actor }}</p>
+            <p v-if="r.remark" class="record-remark">备注：{{ r.remark }}</p>
+            <p v-if="r.action_url" style="margin:0">
+              <a @click="router.push(r.action_url)">查看单据</a>
+            </p>
+          </a-timeline-item>
+          <a-timeline-item v-if="!recordsLoading && records.length === 0" color="gray">暂无客户日志</a-timeline-item>
+        </a-timeline>
+        <a-pagination
+          v-if="recordsTotal > recordsPageSize"
+          :current="recordsPage"
+          :page-size="recordsPageSize"
+          :total="recordsTotal"
+          :show-total="total => `共 ${total} 条`"
+          size="small"
+          class="records-pagination"
+          @change="loadRecords"
+        />
       </a-tab-pane>
     </a-tabs>
 
@@ -622,7 +696,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, PaperClipOutlined, UploadOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import { getDetail, release, edit, analyze, portrait, claim as claimApi, getSelect as searchCustomers } from '@/api/crm/customer'
+import { getDetail, release, edit, analyze, portrait, claim as claimApi, getSelect as searchCustomers, getRecords } from '@/api/crm/customer'
 import { getByCustomer as getContacts, unbind as unbindContact, deleteById as deleteContact, getList as searchContacts } from '@/api/crm/contact'
 import { getList as getFollowups, add as addFollowup, deleteById as deleteFollowup, getCalendarEvents } from '@/api/crm/followUp'
 import { getList as getQuotations } from '@/api/crm/quotation'
@@ -633,6 +707,7 @@ import { getList as getCollabs, add as addCollab, remove as removeCollab } from 
 import { list as getStoreUsers } from '@/api/user'
 // 工单是独立 skill，这里只读它的列表接口
 import { getList as getWorkOrders } from '@skills/workorder/views-v2/api'
+import { getList as getServiceTickets } from '@/api/crm/serviceTicket' 
 import { getAll as getConfigs } from '@/api/crm/config'
 import { getActive } from '@/api/crm/customField'
 import { getCustomerDemands, dismissDemand } from '@/api/crm/demand'
@@ -686,6 +761,14 @@ function eventColor(e) {
 
 // Follow-up
 const followups = ref([])
+const records = ref([])
+const recordsLoading = ref(false)
+const recordsCategory = ref('')
+const serviceTickets = ref([])
+const serviceTicketsLoading = ref(false)
+const recordsPage = ref(1)
+const recordsPageSize = ref(20)
+const recordsTotal = ref(0)
 const followupLoading = ref(false)
 const richEditorRef = ref(null)
 const followupForm = reactive({ follow_type: '', result: '有效', follow_content: '', next_follow_date: null, attachment: '' })
@@ -906,6 +989,39 @@ function loadContacts() {
   const id = route.query.id; if (!id) return
   contactsLoading.value = true
   getContacts(id).then(res => { contacts.value = (res?.data?.list || []); contactsLoading.value = false }).catch(() => { contactsLoading.value = false })
+}
+function onRecordsCategoryChange() {
+  loadRecords(1)
+}
+function loadServiceTickets() {
+  const id = route.query.id; if (!id) return
+  serviceTicketsLoading.value = true
+  getServiceTickets({ customer_id: id, limit: 50 }).then(res => {
+    serviceTickets.value = (res?.data?.list || [])
+  }).catch(e => console.error('loadServiceTickets failed:', e))
+    .finally(() => { serviceTicketsLoading.value = false })
+}
+function serviceStatusColor(status) {
+  return { 1: 'default', 2: 'processing', 3: 'warning', 4: 'success', 5: 'default' }[status] || 'default'
+}
+function goCreateServiceTicket() {
+  router.push({ path: '/crm/service/ticket', query: { customer_id: route.query.id, customer_name: detail.customer_name } })
+}
+function loadRecords(page = 1) {
+  const id = route.query.id; if (!id) return
+  recordsPage.value = page
+  recordsLoading.value = true
+  getRecords(id, page, recordsPageSize.value, recordsCategory.value).then(res => {
+    records.value = res?.data?.list || []
+    recordsTotal.value = Number(res?.data?.total || 0)
+  }).catch(e => console.error('loadRecords failed:', e)).finally(() => { recordsLoading.value = false })
+}
+function recordColor(r) {
+  if (r.kind === 'claim' || r.event_type === 'system_pool') return 'gray'
+  if (r.event_type === 'customer_transferred') return 'red'
+  if (r.event_type === 'customer_cs_assigned') return 'orange'
+  if (r.event_type === 'customer_created') return 'blue'
+  return 'green'
 }
 function loadFollowups() { const id = route.query.id; if (!id) return; getFollowups(id).then(res => { followups.value = (res?.data?.list?.data || res?.data?.list || []) }).catch(() => {}) }
 function loadQuotations() { const id = route.query.id; if (!id) return; getQuotations({ customer_id: id }).then(res => { quotations.value = (res?.data?.list?.data || res?.data?.list || []) }).catch(() => {}) }
@@ -1268,7 +1384,7 @@ onActivated(() => loadEntquerySetting())
 onMounted(() => {
   from.value = route.query.from || ''
   loadEntquerySetting()
-  loadDicts(); loadRegions(); loadDetail(); loadFollowups(); loadContacts(); loadQuotations(); loadOrders(); loadContracts(); loadCollabs(); loadStoreUsers(); loadDemands(); loadCustomerEvents(); loadDocuments(); loadWorkOrders()
+  loadDicts(); loadRegions(); loadDetail(); loadFollowups(); loadRecords(); loadServiceTickets(); loadContacts(); loadQuotations(); loadOrders(); loadContracts(); loadCollabs(); loadStoreUsers(); loadDemands(); loadCustomerEvents(); loadDocuments(); loadWorkOrders()
   // 加载自定义字段定义
   getActive('customer').then(res => {
     customFields.value = (res?.data?.fields || []).map(f => ({
@@ -1283,6 +1399,8 @@ watch(() => aiStore.refreshFlag, (n, o) => {
   if (n > 0 && n !== o) {
     loadDetail()
     loadFollowups()
+    loadRecords(recordsPage.value)
+    loadServiceTickets()
     loadContacts()
     loadQuotations()
     loadOrders()
@@ -1307,6 +1425,10 @@ watch(() => aiStore.refreshFlag, (n, o) => {
 .detail-tags { display: flex; flex-direction: column; gap: 4px; }
 .detail-tag-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .detail-tag-group-name { font-size: 12px; color: #888; margin-right: 4px; white-space: nowrap; }
+.record-remark { color: #cf1322; background: #fff1f0; padding: 2px 8px; border-radius: 3px; margin: 4px 0 0; display: inline-block; }
+.records-pagination { text-align: right; margin-top: 12px; }
+.records-filter { margin-bottom: 12px; }
+.record-category { font-size: 11px; }
 .follow-content { line-height: 1.8; word-break: break-word; overflow-x: auto; }
 .follow-content :deep(img) { max-width: 100% !important; height: auto !important; }
 .follow-content :deep(table) { border-collapse: collapse; width: 100%; font-size: 12px; }

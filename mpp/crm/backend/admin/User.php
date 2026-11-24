@@ -108,6 +108,8 @@ class User extends BaseController
             'roles' => [
                 'isSuper'     => $isSuper,
                 'permissions' => $permissions,
+                // 未开通 skill 的菜单前缀：超管前端也要按它过滤静态路由
+                'disabled_prefixes' => \cores\SkillAccess::disabledMenuPrefixes((int)$this->storeId),
             ],
         ]);
     }
@@ -126,6 +128,7 @@ class User extends BaseController
     private function getAllPermissions(): array
     {
         $menuIds = \think\facade\Db::name('store_menu')
+            ->where('fun_type', 'crm')
             ->where('module', 10)
             ->column('menu_id');
         return $this->buildPermissions($menuIds);
@@ -135,6 +138,7 @@ class User extends BaseController
     {
         // 菜单项 (module=10)
         $menus = \think\facade\Db::name('store_menu')
+            ->where('fun_type', 'crm')
             ->where('module', 10)
             ->whereIn('menu_id', $menuIds)
             ->order('sort', 'asc')
@@ -143,6 +147,7 @@ class User extends BaseController
 
         // 操作项 (module=20) —— 每个菜单的子操作
         $actions = \think\facade\Db::name('store_menu')
+            ->where('fun_type', 'crm')
             ->where('module', 20)
             ->whereIn('menu_id', $menuIds)
             ->select()

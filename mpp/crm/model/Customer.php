@@ -252,6 +252,15 @@ class Customer extends BaseModel
         }
     }
 
+    /**
+     * 当前用户可见的客户ID（供客服单等跨模块复用数据范围）
+     * 调用前需 setCurrentUser() 并设置 
+     */
+    public function getVisibleIds(): array
+    {
+        return array_map('intval', $this->applyPermissionFilter($this->where('is_delete', 0))->column('id'));
+    }
+
     public function select($where = [])
     {
         return $this->where('is_delete', 0)

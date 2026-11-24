@@ -244,9 +244,15 @@ class ContactService extends BaseService
         (new ContactCustomer())->bind($contactId, $customerId, $bindData);
 
         $verb = $existing ? '已绑定' : '已添加';
-        EventService::record('customer_updated', 'customer', $customerId, [
-            'contact_bound' => true, 'contact_id' => $contactId, 'mobile_matched' => !!$existing,
-        ], $actorUserId);
+        $contactName = (string)($data['contact_name'] ?? ($existing['contact_name'] ?? $mobile));
+        CustomerLogService::record(
+            (int)$customerId,
+            $existing ? 'contact_bound' : 'contact_added',
+            ($existing ? '绑定已有联系人' : '新增联系人') . ($contactName !== '' ? "：{$contactName}" : ''),
+            ['contact_id' => $contactId, 'mobile_matched' => (bool)$existing],
+            $actorUserId,
+            $storeId
+        );
 
         OperationLogService::logAdd('联系人', $contactId, $data['contact_name'] ?? $mobile);
 
@@ -286,9 +292,15 @@ class ContactService extends BaseService
         }
 
         if ($detail->save($data)) {
-            EventService::record('customer_updated', 'customer', $detail['customer_id'] ?? 0, [
-                'contact_edited' => true, 'contact_id' => $id,
-            ], $actorUserId);
+            $contactName = (string)($data['contact_name'] ?? ($detail['contact_name'] ?? ''));
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'contact_updated',
+                '编辑联系人' . ($contactName !== '' ? "：{$contactName}" : ''),
+                ['contact_id' => $id],
+                $actorUserId,
+                $storeId
+            );
             OperationLogService::logEdit('联系人', $id, $data['contact_name'] ?? ($detail['contact_name'] ?? ''), $data);
             return ['success' => true, 'data' => null, 'error' => ''];
         }
@@ -300,9 +312,17 @@ class ContactService extends BaseService
     {
         ContactCustomer::$storeId = $storeId;
         (new ContactCustomer())->unbind($contactId, $customerId);
-        EventService::record('customer_updated', 'customer', $customerId, [
-            'contact_unbound' => true, 'contact_id' => $contactId,
-        ], $actorUserId);
+        $contact = \think\facade\Db::name('crm_contact')
+            ->where('store_id', $storeId)->where('id', $contactId)->find();
+        $contactName = (string)($contact['contact_name'] ?? '');
+        CustomerLogService::record(
+            (int)$customerId,
+            'contact_unbound',
+            '解绑联系人' . ($contactName !== '' ? "：{$contactName}" : ''),
+            ['contact_id' => $contactId],
+            $actorUserId,
+            $storeId
+        );
         return ['success' => true, 'data' => null, 'error' => ''];
     }
 
@@ -315,9 +335,20 @@ class ContactService extends BaseService
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '联系人不存在'];
         $detail->is_delete = 1;
         if ($detail->save()) {
-            EventService::record('customer_updated', 'customer', 0, [
-                'contact_deleted' => true, 'contact_id' => $id,
-            ], $actorUserId);
+            // 一个联系人可能绑多个客户，逐个客户留痕（原来 target_id 写死 0，日志挂不上客户）
+            $customerIds = \think\facade\Db::name('crm_contact_customer')
+                ->where('store_id', $storeId)->where('contact_id', $id)->column('customer_id');
+            $contactName = (string)($detail['contact_name'] ?? '');
+            foreach (array_unique(array_map('intval', $customerIds)) as $cid) {
+                CustomerLogService::record(
+                    $cid,
+                    'contact_deleted',
+                    '删除联系人' . ($contactName !== '' ? "：{$contactName}" : ''),
+                    ['contact_id' => $id],
+                    $actorUserId,
+                    $storeId
+                );
+            }
             OperationLogService::logDelete('联系人', $id, $detail['contact_name'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }

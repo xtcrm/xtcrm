@@ -209,7 +209,9 @@ class CustomerService extends BaseService
         $detail = $model->detail($id);
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '客户不存在'];
         if ($detail->setDelete($id)) {
-            EventService::record('customer_updated', 'customer', $id, ['is_delete' => true], $actorUserId);
+            CustomerLogService::record($id, 'customer_deleted', '删除客户', [
+                'customer_name' => $detail['customer_name'] ?? '',
+            ], $actorUserId, $this->storeId);
             OperationLogService::logDelete('客户', $id, $detail['customer_name'] ?? '');
             return ['success' => true, 'data' => null, 'error' => ''];
         }
@@ -468,5 +470,299 @@ class CustomerService extends BaseService
         $result = AiService::smartSearch($query);
         if (!$result['success']) return ['success' => false, 'data' => null, 'error' => '智能搜索失败：' . $result['error']];
         return ['success' => true, 'data' => ['filters' => $result['data']], 'error' => ''];
+    }
+
+    // ------------------------------------------------------------------
+    // 批量转让（销售责任人）
+    // ------------------------------------------------------------------
+
+    /**
+     * 批量转让客户负责人
+     *
+     * 规则（2026-11 定）：
+     *  - 只转客户归属（owner_user_id / owner_department_id），项目、报价、订单、
+     *    合同、跟进记录一概不动，仍按各自的负责人走。
+     *  - 数据范围与列表可见性一致：超管=全部；部门经理=本部门及子部门成员名下；
+     *    其他人=自己负责的客户。入口由菜单权限控制，这里再兜一道。
+     *  - 勾选转让单次最多 2000 个；按负责人整体转让单次最多 5000 个。
+     */
+    public function batchTransfer(array $ids, int $toUserId, string $remark, int $actorUserId): array
+    {
+        return $this->executeTransfer($ids, $toUserId, $remark, $actorUserId, 2000);
+    }
+
+    /**
+     * 按原负责人整体转让：把该负责人名下全部客户一次性转给新负责人
+     */
+    public function transferByOwner(int $fromUserId, int $toUserId, string $remark, int $actorUserId): array
+    {
+        if ($fromUserId <= 0) {
+            return ['success' => false, 'data' => null, 'error' => '请选择原负责人'];
+        }
+        $from = Db::name('store_user')
+            ->where('store_id', $this->storeId)
+            ->where('store_user_id', $fromUserId)
+            ->find();
+        if (!$from) {
+            return ['success' => false, 'data' => null, 'error' => '原负责人不存在或已删除'];
+        }
+
+        $allowedOwnerIds = $this->getTransferAllowedOwnerIds($actorUserId);
+        if ($allowedOwnerIds === []) {
+            return ['success' => false, 'data' => null, 'error' => '当前账号没有可转让的客户'];
+        }
+        if ($allowedOwnerIds !== null && !in_array($fromUserId, $allowedOwnerIds, true)) {
+            return ['success' => false, 'data' => null, 'error' => '该负责人不在你的数据范围内'];
+        }
+
+        $ids = Db::name('crm_customer')
+            ->where('store_id', $this->storeId)
+            ->where('is_delete', 0)
+            ->where('owner_user_id', $fromUserId)
+            ->column('id');
+        if (empty($ids)) {
+            return ['success' => false, 'data' => null, 'error' => '该负责人名下没有客户'];
+        }
+
+        return $this->executeTransfer($ids, $toUserId, $remark, $actorUserId, 5000);
+    }
+
+    /** 转让执行：校验 + 落库（$maxCount 控制单次上限） */
+    private function executeTransfer(array $ids, int $toUserId, string $remark, int $actorUserId, int $maxCount): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (empty($ids)) {
+            return ['success' => false, 'data' => null, 'error' => '请选择要转让的客户'];
+        }
+        if (count($ids) > $maxCount) {
+            return ['success' => false, 'data' => null, 'error' => "单次最多转让 {$maxCount} 个客户，请分批操作"];
+        }
+        if ($toUserId <= 0) {
+            return ['success' => false, 'data' => null, 'error' => '请选择新的负责人'];
+        }
+
+        $target = Db::name('store_user')
+            ->where('store_id', $this->storeId)
+            ->where('store_user_id', $toUserId)
+            ->where('is_delete', 0)
+            ->find();
+        if (!$target) {
+            return ['success' => false, 'data' => null, 'error' => '新负责人不存在或已删除'];
+        }
+        if ((int)($target['is_supplier'] ?? 0) === 1) {
+            return ['success' => false, 'data' => null, 'error' => '不能转让给供应商账号'];
+        }
+
+        // 数据范围：null = 不限制（超管）
+        $allowedOwnerIds = $this->getTransferAllowedOwnerIds($actorUserId);
+        if ($allowedOwnerIds === []) {
+            return ['success' => false, 'data' => null, 'error' => '当前账号没有可转让的客户'];
+        }
+        $allowedSet = $allowedOwnerIds === null ? null : array_flip($allowedOwnerIds);
+
+        $rows = Db::name('crm_customer')
+            ->where('store_id', $this->storeId)
+            ->where('is_delete', 0)
+            ->whereIn('id', $ids)
+            ->field('id,customer_name,owner_user_id,owner_department_id')
+            ->select()->toArray();
+
+        $targets   = [];
+        $forbidden = 0;
+        $unchanged = 0;
+        $missing   = count($ids) - count($rows);
+        foreach ($rows as $row) {
+            $oldOwner = (int)$row['owner_user_id'];
+            if ($oldOwner === $toUserId) {
+                $unchanged++;
+                continue;
+            }
+            if ($allowedSet !== null && !isset($allowedSet[$oldOwner])) {
+                $forbidden++;
+                continue;
+            }
+            $targets[] = $row;
+        }
+
+        if (empty($targets)) {
+            $msg = '没有可转让的客户';
+            if ($unchanged > 0) $msg .= "（{$unchanged} 个已属于该负责人）";
+            if ($forbidden > 0) $msg .= "（{$forbidden} 个不在你的数据范围内）";
+            if ($missing > 0)   $msg .= "（{$missing} 个不存在或已删除）";
+            return ['success' => false, 'data' => null, 'error' => $msg];
+        }
+
+        $toDeptId   = (int)($target['department_id'] ?? 0);
+        $targetName = (string)(($target['real_name'] ?? '') ?: ($target['user_name'] ?? ''));
+        $now        = time();
+        $remark     = trim($remark);
+        if (mb_strlen($remark) > 200) $remark = mb_substr($remark, 0, 200);
+        $logRemark  = '批量转让给' . $targetName . ($remark !== '' ? '：' . $remark : '');
+
+        // 原负责人姓名，用于日志标题
+        $fromOwnerIds = array_values(array_unique(array_map(function ($row) {
+            return (int)$row['owner_user_id'];
+        }, $targets)));
+        $fromOwnerNames = [];
+        if (!empty($fromOwnerIds)) {
+            $fromUsers = Db::name('store_user')
+                ->where('store_id', $this->storeId)
+                ->whereIn('store_user_id', $fromOwnerIds)
+                ->field('store_user_id,real_name,user_name')
+                ->select()->toArray();
+            foreach ($fromUsers as $u) {
+                $fromOwnerNames[(int)$u['store_user_id']] = (string)(($u['real_name'] ?? '') ?: ($u['user_name'] ?? ''));
+            }
+        }
+
+        Db::startTrans();
+        try {
+            foreach (array_chunk($targets, 500) as $chunk) {
+                $chunkIds = array_map('intval', array_column($chunk, 'id'));
+                Db::name('crm_customer')
+                    ->where('store_id', $this->storeId)
+                    ->whereIn('id', $chunkIds)
+                    ->update([
+                        'owner_user_id'       => $toUserId,
+                        'owner_department_id' => $toDeptId,
+                        'update_time'         => $now,
+                    ]);
+
+                $logs = [];
+                foreach ($chunk as $row) {
+                    $logs[] = [
+                        'store_id'     => $this->storeId,
+                        'customer_id'  => (int)$row['id'],
+                        'from_user_id' => (int)$row['owner_user_id'],
+                        'to_user_id'   => $toUserId,
+                        'action'       => 4,  // 4=管理员/管理人分配
+                        'slot'         => 1,  // 1=销售责任位
+                        'remark'       => $logRemark,
+                        'create_time'  => $now,
+                    ];
+                }
+                Db::name('crm_customer_claim_log')->insertAll($logs);
+
+                foreach ($chunk as $row) {
+                    $fromOwner = (int)$row['owner_user_id'];
+                    CustomerLogService::record(
+                        (int)$row['id'],
+                        'customer_transferred',
+                        '转让负责人：' . ($fromOwnerNames[$fromOwner] ?? '未分配') . ' → ' . $targetName,
+                        [
+                            'from_owner' => $fromOwner,
+                            'to_owner'   => $toUserId,
+                            'remark'     => $remark,
+                        ],
+                        $actorUserId,
+                        $this->storeId
+                    );
+                }
+            }
+            Db::commit();
+        } catch (\Throwable $e) {
+            Db::rollback();
+            return ['success' => false, 'data' => null, 'error' => '转让失败：' . $e->getMessage()];
+        }
+
+        $count = count($targets);
+        OperationLogService::log('transfer', '客户', 0, "批量转让 {$count} 个客户给「{$targetName}」", [
+            'to_user_id'   => $toUserId,
+            'customer_ids' => array_map('intval', array_column($targets, 'id')),
+            'skipped'      => ['forbidden' => $forbidden, 'unchanged' => $unchanged, 'missing' => $missing],
+            'remark'       => $remark,
+        ], $actorUserId, '', $this->storeId);
+
+        return ['success' => true, 'data' => [
+            'count'        => $count,
+            'forbidden'    => $forbidden,
+            'unchanged'    => $unchanged,
+            'missing'      => $missing,
+            'to_user_name' => $targetName,
+        ], 'error' => ''];
+    }
+
+    /**
+     * 转让时允许操作的「原负责人」集合，null 表示不限制（超管）
+     */
+    private function getTransferAllowedOwnerIds(int $actorUserId): ?array
+    {
+        $actor = Db::name('store_user')
+            ->where('store_id', $this->storeId)
+            ->where('store_user_id', $actorUserId)
+            ->find();
+        if (!$actor) return [];
+        if (!empty($actor['is_super'])) return null;
+
+        $deptIds = $this->getManagedDeptIds($actorUserId);
+        if (empty($deptIds)) return [$actorUserId];
+
+        $ownerIds = Db::name('store_user')
+            ->where('store_id', $this->storeId)
+            ->where('is_delete', 0)
+            ->whereIn('department_id', $deptIds)
+            ->column('store_user_id');
+        $ownerIds[] = $actorUserId;
+        return array_values(array_unique(array_map('intval', $ownerIds)));
+    }
+
+    /**
+     * 我管辖的部门子树（可能同时管多个中心）
+     */
+    private function getManagedDeptIds(int $userId): array
+    {
+        $ids = Db::name('store_department')
+            ->where('store_id', $this->storeId)
+            ->where('manager_id', $userId)
+            ->where('is_delete', 0)
+            ->column('id');
+        $ids = array_map('intval', $ids);
+        if (empty($ids)) return [];
+
+        $queue = $ids;
+        while (!empty($queue)) {
+            $children = Db::name('store_department')
+                ->where('store_id', $this->storeId)
+                ->whereIn('parent_id', $queue)
+                ->where('is_delete', 0)
+                ->column('id');
+            $children = array_values(array_diff(array_map('intval', $children), $ids));
+            if (empty($children)) break;
+            $ids   = array_merge($ids, $children);
+            $queue = $children;
+        }
+        return array_values(array_unique($ids));
+    }
+
+    // ------------------------------------------------------------------
+    // 客户日志（统一时间轴：crm_touchpoint）
+    // ------------------------------------------------------------------
+
+    /**
+     * 客户日志（详情页「客户日志」页签）
+     *
+     * 数据来自 crm_touchpoint（触点投影）；客户事件由 EventService 自动投影，
+     * 客服单等新模块直接写触点。历史数据回填见迁移 047。
+     */
+    public function getRecords(int $customerId, int $page = 1, int $pageSize = 20, string $category = ''): array
+    {
+        if ($customerId <= 0) {
+            return ['success' => false, 'data' => null, 'error' => '缺少客户ID'];
+        }
+        $exists = Db::name('crm_customer')
+            ->where('store_id', $this->storeId)
+            ->where('id', $customerId)
+            ->find();
+        if (!$exists) {
+            return ['success' => false, 'data' => null, 'error' => '客户不存在'];
+        }
+
+        $data = (new TouchpointService())->forStore((int)$this->storeId)->getTimeline($customerId, [
+            'page'     => $page,
+            'limit'    => $pageSize,
+            'category' => $category,
+        ]);
+
+        return ['success' => true, 'data' => $data, 'error' => ''];
     }
 }

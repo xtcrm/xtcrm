@@ -532,4 +532,13 @@ function handleLogout() { userStore.logout(); router.replace('/passport/login') 
 // ===== Page transitions =====
 // 已移到 global.less —— Transition 现在挂在 TabPageView 渲染出的页面根节点上，
 // scoped 属性对不上，写在这里不生效。
+
+// 打印兜底：任何页面直接 Ctrl+P 时，隐藏侧边栏/顶栏/AI 面板，只打印内容
+@media print {
+  .custom-sider, .main-header, .ai-panel, .ai-panel-tab, :deep(.tab-bar) { display: none !important; }
+  .main-layout, .main-body, .main-content {
+    margin: 0 !important; padding: 0 !important; height: auto !important;
+    overflow: visible !important; display: block !important;
+  }
+}
 </style>

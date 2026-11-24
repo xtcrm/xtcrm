@@ -1,6 +1,6 @@
 {
     "name": "crm",
-    "version": "2.11.1",
+    "version": "2.14.2",
     "title": "CRM客户管理",
     "description": "制造业基础版CRM，覆盖客户、线索、报价、订单、合同全流程",
     "author": "雄韬科技",
@@ -10,6 +10,8 @@
     },
     "tables": [
         "crm_customer",
+        "crm_touchpoint",
+        "crm_service_ticket",
         "crm_contact",
         "crm_lead",
         "crm_followup",

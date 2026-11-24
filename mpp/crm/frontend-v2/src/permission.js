@@ -9,6 +9,24 @@ NProgress.configure({ showSpinner: false })
 let progressTimer = null
 let progressStarted = false
 
+// 旧岗位工作台入口已下线，老书签/深链跳到对应新列表，避免 404
+const LEGACY_WORKBENCH_REDIRECTS = {
+  '/crm/workbench/cs': '/crm/customer/index',
+  '/crm/workbench/delivery': '/crm/project/index',
+  '/crm/workbench/review': '/crm/project/review',
+  // AI 应用构建器已下线
+  '/ai': '/index/dashboard',
+  '/ai/app-builder': '/index/dashboard',
+  '/ai/app-list': '/index/dashboard',
+  '/ai/config-manager': '/index/dashboard',
+  '/ai/dict-manager': '/index/dashboard',
+}
+
+router.beforeEach((to) => {
+  const target = LEGACY_WORKBENCH_REDIRECTS[to.path]
+  if (target) return { path: target, query: to.query, replace: true }
+})
+
 router.beforeEach(async (to) => {
   clearTimeout(progressTimer)
   progressTimer = setTimeout(() => {

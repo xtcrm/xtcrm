@@ -49,7 +49,17 @@ class OrderService extends BaseService
                 $this->syncIntentsFromQuotation((int)$data['quotation_id'], $actorUserId);
             }
             try { InsightService::handleEvent('order_created', $data['customer_id'] ?? 0); } catch (\Throwable $e) {}
-            OperationLogService::logAdd('订单', $model->id, $data['order_no'] ?? ('SO-'.$model->id));
+            $orderNo = $data['order_no'] ?? ('SO-' . $model->id);
+            CustomerLogService::record(
+                (int)($data['customer_id'] ?? 0),
+                'order_created',
+                "新建订单 {$orderNo}",
+                ['order_id' => $model->id, 'no' => $orderNo, 'amount' => $data['final_amount'] ?? $data['total_amount'] ?? 0],
+                $actorUserId,
+                $this->storeId,
+                (int)($data['project_id'] ?? 0)
+            );
+            OperationLogService::logAdd('订单', $model->id, $orderNo);
             return ['success' => true, 'data' => ['id' => $model->id], 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '添加失败'];
@@ -73,6 +83,14 @@ class OrderService extends BaseService
         $detail = $model->detail($id);
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '订单不存在'];
         if ($detail->setDelete($id)) {
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'order_deleted',
+                '删除订单 ' . ($detail['order_no'] ?? ''),
+                ['order_id' => $id],
+                $actorUserId,
+                $this->storeId
+            );
             OperationLogService::logDelete('订单', $id, $detail['order_no'] ?? '');
             EventService::record('order_status_changed', 'order', $id, [
                 'customer_id' => $detail['customer_id'] ?? 0, 'deleted' => true,
@@ -90,6 +108,16 @@ class OrderService extends BaseService
         $oldStatus = $detail['status'] ?? 0;
         $detail->status = $status;
         if ($detail->save()) {
+            $statusNames = [1 => '待确认', 2 => '生产中', 3 => '待发货', 4 => '已发货', 5 => '已完成', 6 => '已取消'];
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'order_status_changed',
+                '订单 ' . ($detail['order_no'] ?? '') . '：' . ($statusNames[$status] ?? ('状态' . $status)),
+                ['order_id' => $id, 'from_status' => $oldStatus, 'to_status' => $status],
+                $actorUserId,
+                $this->storeId,
+                (int)($detail['project_id'] ?? 0)
+            );
             EventService::record('order_status_changed', 'order', $id, [
                 'customer_id' => $detail['customer_id'] ?? 0,
                 'from_status' => $oldStatus,

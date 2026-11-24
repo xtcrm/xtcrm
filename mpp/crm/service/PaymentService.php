@@ -72,6 +72,15 @@ class PaymentService extends BaseService
                 'update_time' => time(),
             ]);
 
+            CustomerLogService::record(
+                (int)$order['customer_id'],
+                'payment_received',
+                '登记回款 ' . number_format((float)$amount, 2) . "（{$paymentNo}）",
+                ['payment_id' => $paymentId, 'payment_no' => $paymentNo, 'amount' => $amount, 'method' => (string)($data['method'] ?? '')],
+                $actorId,
+                $storeId,
+                $projectId
+            );
             EventService::record('payment_received', 'order', $orderId, [
                 'payment_id' => $paymentId,
                 'payment_no' => $paymentNo,

@@ -36,6 +36,18 @@ export function batchUpdate(data) {
   return request({ url: '/crm.customer/batchUpdate', method: 'post', data })
 }
 
+export function batchTransfer(data) {
+  return request({ url: '/crm.customer/batchTransfer', method: 'post', data })
+}
+
+export function transferByOwner(data) {
+  return request({ url: '/crm.customer/transferByOwner', method: 'post', data })
+}
+
+export function getRecords(id, page = 1, limit = 20, category = '') {
+  return request({ url: '/crm.customer/records', method: 'get', params: { id, page, limit, category } })
+}
+
 export function batchDelete(ids) {
   return request({ url: '/crm.customer/batchDelete', method: 'post', data: { ids } })
 }

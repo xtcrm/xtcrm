@@ -127,6 +127,7 @@ class Role extends BaseController
         $current = $menuIds;
         while (!empty($current)) {
             $parents = \think\facade\Db::name('store_menu')
+                ->where('fun_type', 'crm')
                 ->whereIn('menu_id', $current)
                 ->where('parent_id', '>', 0)
                 ->column('parent_id');

@@ -7,6 +7,7 @@ use mpp\crm\model\Tag as TagModel;
 use mpp\crm\model\CustomerTag as CustomerTagModel;
 use mpp\crm\model\ContactTag as ContactTagModel;
 use mpp\crm\service\OperationLogService;
+use app\platform\auth\TokenService;
 
 class TagService extends BaseService
 {
@@ -127,6 +128,15 @@ class TagService extends BaseService
         $model = new CustomerTagModel();
         $model::$storeId = $this->storeId;
         if ($model->setTags($customerId, $tagIds)) {
+            $actor = TokenService::getUser() ?: [];
+            CustomerLogService::record(
+                $customerId,
+                'customer_tags_updated',
+                !empty($names) ? ('更新客户标签：' . implode('、', array_values($names))) : '清空客户标签',
+                ['tags' => array_values($names)],
+                (int)($actor['store_user_id'] ?? 0),
+                $this->storeId
+            );
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '设置失败'];

@@ -41,13 +41,22 @@ class FollowUpService extends BaseService
         if ($model->add($data)) {
             // 附件同时归档到文件袋（crm_document），归档失败不阻断跟进保存
             $this->archiveAttachment((int)$model->id, $data, $actorUserId);
-            EventService::record('follow_up_completed', 'customer', $data['customer_id'] ?? 0, [
-                'followup_id' => $model->id,
-                'project_id' => (int)($data['project_id'] ?? 0),
-                'intent_id' => (int)($data['intent_id'] ?? 0),
-                'follow_type' => $data['follow_type'] ?? '',
-                'result' => $data['result'] ?? '',
-            ], $actorUserId, (int)($data['project_id'] ?? 0));
+            $followType = (string)($data['follow_type'] ?? '');
+            CustomerLogService::record(
+                (int)($data['customer_id'] ?? 0),
+                'follow_up_completed',
+                $followType !== '' ? "新增跟进（{$followType}）" : '新增跟进',
+                [
+                    'followup_id' => $model->id,
+                    'project_id'  => (int)($data['project_id'] ?? 0),
+                    'intent_id'   => (int)($data['intent_id'] ?? 0),
+                    'follow_type' => $followType,
+                    'result'      => $data['result'] ?? '',
+                ],
+                $actorUserId,
+                $this->storeId,
+                (int)($data['project_id'] ?? 0)
+            );
             OperationLogService::logAdd('跟进记录', $model->id, '客户ID:'.($data['customer_id']??0));
             try { InsightService::handleEvent('follow_up_completed', $data['customer_id'] ?? 0); } catch (\Throwable $e) {}
             return ['success' => true, 'data' => ['id' => $model->id], 'error' => ''];
@@ -117,6 +126,15 @@ class FollowUpService extends BaseService
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '跟进记录不存在'];
         if ($detail->edit($data)) {
             OperationLogService::logEdit('跟进记录', $id, 'ID:'.$id, $data);
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'follow_up_updated',
+                '编辑跟进记录',
+                ['followup_id' => $id],
+                $actorUserId,
+                $this->storeId,
+                (int)($detail['project_id'] ?? 0)
+            );
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $detail->getError() ?: '更新失败'];
@@ -131,9 +149,15 @@ class FollowUpService extends BaseService
         $detail->is_delete = 1;
         if ($detail->save()) {
             OperationLogService::logDelete('跟进记录', $id, 'ID:'.$id);
-            EventService::record('customer_updated', 'customer', $customerId, [
-                'followup_deleted' => true, 'followup_id' => $id,
-            ], $actorUserId);
+            CustomerLogService::record(
+                (int)$customerId,
+                'follow_up_deleted',
+                '删除跟进记录',
+                ['followup_id' => $id],
+                $actorUserId,
+                $this->storeId,
+                (int)($detail['project_id'] ?? 0)
+            );
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => '删除失败'];

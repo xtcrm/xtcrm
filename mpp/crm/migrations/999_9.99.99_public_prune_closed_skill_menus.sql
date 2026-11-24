@@ -18,6 +18,8 @@ DELETE FROM yoshop_store_role_menu WHERE menu_id IN (
         OR path LIKE '/app/entquery%'
         OR path = '/ai'
         OR path LIKE '/ai/%'
+        OR path = '/forum'
+        OR path LIKE '/forum/%'
     )
 );
 
@@ -30,4 +32,6 @@ WHERE fun_type = 'crm' AND (
     OR path LIKE '/app/entquery%'
     OR path = '/ai'
     OR path LIKE '/ai/%'
+    OR path = '/forum'
+    OR path LIKE '/forum/%'
 );

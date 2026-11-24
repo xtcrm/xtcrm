@@ -1,0 +1,1 @@
+import{s as e}from"./index-CiTONKg8.js";function t(){return e({url:`/crm.dashboard/index`,method:`get`})}export{t};

@@ -88,7 +88,9 @@ class AllowCrossDomain
             'http://127.0.0.1:4399',
             'http://192.168.1.3:9998',
             'http://192.168.1.3:8210',
-            'http://localhost:8080' 
+            'http://localhost:8080',
+            'http://192.168.10.32:9999',
+            'http://192.168.1.2:9998'
         ];
         
         $origin = request()->header('origin', '');
@@ -96,8 +98,10 @@ class AllowCrossDomain
         if (in_array($origin, $allowOrigins)) {
             $allowOrigin = $origin;
         } else {
-            // 官网多租户：通配子域名 *.web.xtocn.com / *.yj.xtocn.com
+            // 通配域名：xtocn.com 全站 + 历史 web/yj 子域名规则
             $patterns = [
+                // 全部 xtocn.com 域名：apex、一级/多级子域名，任意端口
+                '#^https?://(?:[a-z0-9][a-z0-9-]*\.)*xtocn\.com(:\d+)?$#i',
                 '#^https?://[a-z0-9][a-z0-9-]*\.web\.xtocn\.com(:\d+)?$#i',
                 '#^https?://[a-z0-9][a-z0-9-]*\.yj\.xtocn\.com(:\d+)?$#i',
             ];

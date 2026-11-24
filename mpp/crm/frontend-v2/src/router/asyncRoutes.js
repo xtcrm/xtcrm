@@ -2,14 +2,16 @@
 //
 // 与私有版 mpp/crm/frontend-v2/src/router/asyncRoutes.js 的差异：
 //   - 只保留已开源的 3 个 skill：contentengine / invoice / quotecn
-//   - 去掉 workorder / studio / leadledger / website / entquery 等闭源 skill 的路由
+//   - 工单保留占位路由；studio / leadledger / website / entquery 等闭源 skill 路由不引入
 //   - 去掉 AI 应用构建器（/ai/*）与论坛（/forum/*），这两块不在开源范围内
+//   - 保留平台流程引擎的工作台/应用路由（app/platform/flow 已开源）
 //   - 去掉 router/index.js 里的 /app/preview 路由（见 overrides 里的 index.js）
 const Placeholder = () => import('@/views/Placeholder.vue')
 const RouteView = () => import('@/router/RouteView.vue')
 import contentEngineRoutes from '@skills/contentengine/routes-v2'
 import quoteCnRoutes from '@skills/quotecn/routes-v2'
 import invoiceRoutes from '@skills/invoice/routes-v2'
+import { flowWorkbenchRoutes, flowAdminRoutes } from '@platform/flow/views-v2/routes-v2'
 
 export const defaultRedirect = '/index'
 
@@ -33,24 +35,7 @@ export const asyncRoutes = [
             component: () => import('@/views/index/Index.vue'),
             meta: { title: '仪表盘', keepAlive: true, affix: true, permission: ['/index'] },
           },
-          {
-            path: '/crm/workbench/cs',
-            name: 'workbench-cs',
-            component: () => import('@/views/workbench/Cs.vue'),
-            meta: { title: '我的服务客户', permission: ['/crm/workbench/cs'] },
-          },
-          {
-            path: '/crm/workbench/delivery',
-            name: 'workbench-delivery',
-            component: () => import('@/views/workbench/Delivery.vue'),
-            meta: { title: '我的交付', permission: ['/crm/workbench/delivery'] },
-          },
-          {
-            path: '/crm/workbench/review',
-            name: 'workbench-review',
-            component: () => import('@/views/workbench/Review.vue'),
-            meta: { title: '待审队列', permission: ['/crm/workbench/review'] },
-          },
+          ...flowWorkbenchRoutes,
         ],
       },
       // ========== 客户管理（含线索） ==========
@@ -66,6 +51,8 @@ export const asyncRoutes = [
           { path: '/crm/customer/pool', name: 'customer-pool', component: () => import('@/views/crm/customer/pool.vue'), meta: { title: '公海池', permission: ['/crm/customer/pool', '/crm/customer/poolLists'] } },
           { path: '/crm/customer/collab', name: 'customer-collab', component: () => import('@/views/crm/customer/collab.vue'), meta: { title: '协作客户', permission: ['/crm/customer/collab', '/crm/customer/collabLists'] } },
           { path: '/crm/customer/assign', name: 'customer-assign', component: () => import('@/views/crm/customer/assign.vue'), meta: { title: '待分配客户', permission: ['/crm/customer/assign', '/crm/customer/assignLists'] } },
+          { path: '/crm/service/ticket', name: 'service-ticket', component: () => import('@/views/crm/service/Index.vue'), meta: { title: '客服单', permission: ['/crm/service/ticket', '/crm/serviceTicket/lists'] } },
+          { path: '/crm/customer/transfer', name: 'customer-transfer', component: () => import('@/views/crm/customer/transfer.vue'), meta: { title: '客户转让', permission: ['/crm/customer/transfer', '/crm/customer/batchTransfer'] } },
           { path: '/crm/customer/detail', name: 'customer-detail', component: () => import('@/views/crm/customer/detail.vue'), meta: { title: '客户详情', permission: ['/crm/customer/detail'], hidden: true } },
           { path: '/crm/customer/create', name: 'customer-create', component: () => import('@/views/crm/customer/create.vue'), meta: { title: '新增客户', permission: ['/crm/customer/create'] } },
 
@@ -155,15 +142,28 @@ export const asyncRoutes = [
           },
         ],
       },
-      // ========== 应用（开源版只带票无忧） ==========
+      // ========== 应用（开源版带票无忧 + 平台流程） ==========
       {
         path: '/app',
         name: 'app',
         component: RouteView,
-        redirect: '/app/invoice/list',
+        redirect: '/app/flow/template',
         meta: { title: '应用', icon: 'appstore', permission: ['/app'] },
         children: [
+          ...flowAdminRoutes,
           ...invoiceRoutes,
+          // 工单不在开源范围：保留占位路由，避免客户详情里的工单链接 404
+          {
+            path: '/app/workorder',
+            name: 'app-workorder',
+            component: RouteView,
+            redirect: '/app/workorder/list',
+            meta: { title: '工单', permission: ['/app/workorder'] },
+            children: [
+              { path: '/app/workorder/list', component: Placeholder, meta: { title: '工单列表', permission: ['/app/workorder/list'] } },
+              { path: '/app/workorder/detail', component: Placeholder, meta: { title: '工单详情', permission: ['/app/workorder/detail'], hidden: true } },
+            ],
+          },
         ],
       },
       // ========== 系统设置（产品+管理员+CRM设置） ==========

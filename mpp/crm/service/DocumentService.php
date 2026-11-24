@@ -5,6 +5,7 @@ use app\platform\BaseService;
 use mpp\crm\service\OperationLogService;
 use mpp\crm\model\Document as DocumentModel;
 use app\common\library\storage\Driver as StorageDriver;
+use app\platform\auth\TokenService;
 
 class DocumentService extends BaseService
 {
@@ -76,6 +77,14 @@ class DocumentService extends BaseService
         ];
 
         if ($model->add($docData)) {
+            CustomerLogService::record(
+                $customerId,
+                'document_uploaded',
+                '上传文件：' . ($docData['title'] ?? ''),
+                ['document_id' => $model->id, 'file_id' => $fileId, 'category' => $docData['category'] ?? ''],
+                $userId,
+                $storeId
+            );
             return ['success' => true, 'data' => ['id' => $model->id, 'file_id' => $fileId], 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $model->getError() ?: '保存失败'];
@@ -105,6 +114,15 @@ class DocumentService extends BaseService
         if (!$detail) return ['success' => false, 'data' => null, 'error' => '文件不存在'];
         if ($detail->edit($data)) {
             OperationLogService::logEdit('文件', $id, $data['title'] ?? ($detail['title'] ?? ''), $data);
+            $actor = TokenService::getUser() ?: [];
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'document_updated',
+                '编辑文件：' . ($data['title'] ?? ($detail['title'] ?? '')),
+                ['document_id' => $id],
+                (int)($actor['store_user_id'] ?? 0),
+                $this->storeId
+            );
             return ['success' => true, 'data' => null, 'error' => ''];
         }
         return ['success' => false, 'data' => null, 'error' => $detail->getError() ?: '更新失败'];
@@ -131,6 +149,15 @@ class DocumentService extends BaseService
         $fileId = $detail->file_id;
         if ($detail->save()) {
             OperationLogService::logDelete('文件', $id, $detail['title'] ?? '');
+            $actor = TokenService::getUser() ?: [];
+            CustomerLogService::record(
+                (int)($detail['customer_id'] ?? 0),
+                'document_deleted',
+                '删除文件：' . ($detail['title'] ?? ''),
+                ['document_id' => $id],
+                (int)($actor['store_user_id'] ?? 0),
+                $this->storeId
+            );
             // 软删除 upload_file
             \think\facade\Db::name('upload_file')->where('file_id', $fileId)->update(['is_delete' => 1]);
             return ['success' => true, 'data' => null, 'error' => ''];

@@ -86,6 +86,30 @@ export const useTabsStore = defineStore('tabs', () => {
       if (!Array.isArray(arr)) return []
       return arr
         .filter((t) => t && t.key && t.title)
+        .map((t) => {
+          let path = String(t.path || '')
+          let key = String(t.key || '')
+
+          // 已下线的旧岗位工作台 / AI 应用构建器页面，直接丢弃
+          if (path.startsWith('/crm/workbench/') || path.startsWith('/ai/')) return null
+
+          // 流程入口从 /app/flow 移到 /index/flow，恢复旧页签时自动改址
+          const moves = [
+            ['/app/flow/task', '/index/flow/task'],
+            ['/app/flow/instance', '/index/flow/instance'],
+          ]
+          for (const [from, to] of moves) {
+            if (path === from) path = to
+            if (key === from || key.startsWith(from + '?') || key.startsWith(from + '/')) {
+              key = to + key.slice(from.length)
+            }
+          }
+
+          t.path = path
+          t.key = key
+          return t
+        })
+        .filter(Boolean)
         .slice(-RESTORE_MAX)
     } catch { return [] }
   }
